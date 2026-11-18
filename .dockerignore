@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/TestResults/
+**/.vs/
+**/.idea/
+**/*.user
+.git/
+.env
+.env.*
+frontend/
+tests/
+docs/
+*.md

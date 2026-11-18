@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Use cases, validation and abstractions. Depends only on Domain and Contracts. -->
+  <PropertyGroup>
+    <RootNamespace>NepalParcel.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NepalParcel.Domain\NepalParcel.Domain.csproj" />
+    <ProjectReference Include="..\NepalParcel.Contracts\NepalParcel.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NepalParcel.UnitTests" />
+  </ItemGroup>
+</Project>

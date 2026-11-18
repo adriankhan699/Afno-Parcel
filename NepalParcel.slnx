@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NepalParcel.API/NepalParcel.API.csproj" />
+    <Project Path="src/NepalParcel.Application/NepalParcel.Application.csproj" />
+    <Project Path="src/NepalParcel.Contracts/NepalParcel.Contracts.csproj" />
+    <Project Path="src/NepalParcel.Domain/NepalParcel.Domain.csproj" />
+    <Project Path="src/NepalParcel.Infrastructure/NepalParcel.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NepalParcel.IntegrationTests/NepalParcel.IntegrationTests.csproj" />
+    <Project Path="tests/NepalParcel.UnitTests/NepalParcel.UnitTests.csproj" />
+  </Folder>
+</Solution>
