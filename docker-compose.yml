@@ -28,6 +28,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=${SQL_DATABASE:-AfnoParcel};User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
       Database__ApplyMigrationsOnStartup: "true"
+      Database__SeedReferenceData: "true"
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env (random 64+ characters, see .env.example)}
       Bootstrap__SuperAdmin__Email: ${BOOTSTRAP_SUPERADMIN_EMAIL:-}
       Bootstrap__SuperAdmin__Password: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-}

@@ -793,6 +793,10 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("BaseCharge")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTimeOffset>("BookedAtUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -801,7 +805,15 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<decimal>("ChargeableWeightKg")
+                        .HasPrecision(10, 3)
+                        .HasColumnType("decimal(10,3)");
+
                     b.Property<decimal>("CodAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CodFee")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -832,11 +844,24 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<Guid?>("DestinationBranchId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset?>("EstimatedDeliveryAtUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<decimal?>("HeightCm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
+                    b.Property<decimal?>("LengthCm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
@@ -844,6 +869,21 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("OriginBranchId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid?>("PricingRuleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReceiverAddressInstructions")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("ReceiverName")
                         .IsRequired()
@@ -861,8 +901,22 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<string>("SenderAddressInstructions")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<Guid>("SenderCustomerId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("SenderPhone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ServiceType")
                         .IsRequired()
@@ -881,11 +935,33 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("VatPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("VolumetricWeightKg")
+                        .HasPrecision(10, 3)
+                        .HasColumnType("decimal(10,3)");
+
+                    b.Property<decimal>("WeightCharge")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("WeightKg")
                         .HasPrecision(10, 3)
                         .HasColumnType("decimal(10,3)");
 
+                    b.Property<decimal?>("WidthCm")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("decimal(8,2)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("BookedAtUtc");
 
                     b.HasIndex("CurrentBranchId");
 
@@ -895,9 +971,13 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OriginBranchId");
 
+                    b.HasIndex("PricingRuleId");
+
                     b.HasIndex("ReceiverPhone");
 
                     b.HasIndex("SenderCustomerId");
+
+                    b.HasIndex("SenderPhone");
 
                     b.HasIndex("TrackingNumber")
                         .IsUnique();
@@ -907,6 +987,8 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.ToTable("Parcels", "parcel", t =>
                         {
                             t.HasCheckConstraint("CK_Parcels_Amounts", "[DeclaredValue] >= 0 AND [DeliveryCharge] >= 0 AND [CodAmount] >= 0");
+
+                            t.HasCheckConstraint("CK_Parcels_Booking", "[Quantity] > 0 AND [VolumetricWeightKg] >= 0 AND [ChargeableWeightKg] > 0 AND [BaseCharge] >= 0 AND [WeightCharge] >= 0 AND [CodFee] >= 0 AND [VatAmount] >= 0");
 
                             t.HasCheckConstraint("CK_Parcels_WeightKg", "[WeightKg] > 0");
                         });
@@ -995,18 +1077,18 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         new
                         {
                             Id = 1,
-                            Code = "Booked",
+                            Code = "BookingCreated",
                             Description = "Booking confirmed; waiting to be handed over.",
                             IsPublic = true,
                             IsTerminal = false,
-                            Name = "Booked",
+                            Name = "Booking created",
                             SortOrder = 1
                         },
                         new
                         {
                             Id = 2,
                             Code = "PickedUp",
-                            Description = "Collected from the sender.",
+                            Description = "Collected from the sender or received at the counter.",
                             IsPublic = true,
                             IsTerminal = false,
                             Name = "Picked up",
@@ -1015,11 +1097,11 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         new
                         {
                             Id = 3,
-                            Code = "ReceivedAtBranch",
-                            Description = "Received and checked at an Afno Parcel branch.",
+                            Code = "Shipped",
+                            Description = "Dispatched from the origin branch into the network.",
                             IsPublic = true,
                             IsTerminal = false,
-                            Name = "Received at branch",
+                            Name = "Shipped",
                             SortOrder = 3
                         },
                         new
@@ -1035,11 +1117,11 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         new
                         {
                             Id = 5,
-                            Code = "ReceivedAtWarehouse",
-                            Description = "Stored at a warehouse or sorting hub.",
+                            Code = "ArrivedAtWarehouse",
+                            Description = "Received and scanned at a warehouse or sorting hub.",
                             IsPublic = true,
                             IsTerminal = false,
-                            Name = "Received at warehouse",
+                            Name = "Arrived at warehouse",
                             SortOrder = 5
                         },
                         new
@@ -1056,7 +1138,7 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         {
                             Id = 7,
                             Code = "Delivered",
-                            Description = "Handed over to the recipient.",
+                            Description = "Handed over to the receiver.",
                             IsPublic = true,
                             IsTerminal = true,
                             Name = "Delivered",
@@ -1066,21 +1148,11 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         {
                             Id = 8,
                             Code = "DeliveryFailed",
-                            Description = "Recipient unavailable or address problem.",
+                            Description = "Receiver unavailable or address problem.",
                             IsPublic = true,
                             IsTerminal = false,
                             Name = "Delivery attempt failed",
                             SortOrder = 8
-                        },
-                        new
-                        {
-                            Id = 9,
-                            Code = "ReturnToSender",
-                            Description = "Being sent back to the sender.",
-                            IsPublic = true,
-                            IsTerminal = false,
-                            Name = "Return to sender",
-                            SortOrder = 9
                         },
                         new
                         {
@@ -1576,6 +1648,47 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.ToTable("ServiceAreas", "parcel", t =>
                         {
                             t.HasCheckConstraint("CK_ServiceAreas_Days", "[EstimatedDeliveryDays] >= 0 AND [EstimatedDeliveryDays] <= 30");
+                        });
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Tracking.TrackingOtp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTimeOffset?>("ConsumedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ParcelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParcelId", "CreatedAtUtc");
+
+                    b.ToTable("TrackingOtps", "parcel", t =>
+                        {
+                            t.HasCheckConstraint("CK_TrackingOtps_Attempts", "[FailedAttempts] >= 0");
                         });
                 });
 
@@ -2087,6 +2200,11 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("NepalParcel.Domain.Pricing.PricingRule", null)
+                        .WithMany()
+                        .HasForeignKey("PricingRuleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("NepalParcel.Domain.Customers.Customer", null)
                         .WithMany()
                         .HasForeignKey("SenderCustomerId")
@@ -2144,7 +2262,61 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("ParcelId");
                         });
 
+                    b.OwnsOne("NepalParcel.Domain.Common.NepalAddress", "SenderAddress", b1 =>
+                        {
+                            b1.Property<Guid>("ParcelId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("District")
+                                .IsRequired()
+                                .HasMaxLength(60)
+                                .HasColumnType("nvarchar(60)")
+                                .HasColumnName("SenderAddressDistrict");
+
+                            b1.Property<string>("Landmark")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)")
+                                .HasColumnName("SenderAddressLandmark");
+
+                            b1.Property<string>("Municipality")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)")
+                                .HasColumnName("SenderAddressMunicipality");
+
+                            b1.Property<string>("PostalCode")
+                                .HasMaxLength(5)
+                                .HasColumnType("nchar(5)")
+                                .HasColumnName("SenderAddressPostalCode")
+                                .IsFixedLength();
+
+                            b1.Property<string>("Province")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)")
+                                .HasColumnName("SenderAddressProvince");
+
+                            b1.Property<string>("StreetOrTole")
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)")
+                                .HasColumnName("SenderAddressStreetOrTole");
+
+                            b1.Property<int>("WardNumber")
+                                .HasColumnType("int")
+                                .HasColumnName("SenderAddressWardNumber");
+
+                            b1.HasKey("ParcelId");
+
+                            b1.ToTable("Parcels", "parcel");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ParcelId");
+                        });
+
                     b.Navigation("ReceiverAddress")
+                        .IsRequired();
+
+                    b.Navigation("SenderAddress")
                         .IsRequired();
                 });
 
@@ -2263,6 +2435,15 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ServingBranchId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Tracking.TrackingOtp", b =>
+                {
+                    b.HasOne("NepalParcel.Domain.Parcels.Parcel", null)
+                        .WithMany()
+                        .HasForeignKey("ParcelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("NepalParcel.Domain.Warehouses.Warehouse", b =>

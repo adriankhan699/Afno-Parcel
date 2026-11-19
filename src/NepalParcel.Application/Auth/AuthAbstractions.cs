@@ -80,6 +80,9 @@ public interface ICustomerRepository
     void Add(Customer customer);
 
     Task<Customer?> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>An existing walk-in customer (no login) with the same normalised phone number and name, if any.</summary>
+    Task<Customer?> FindWalkInAsync(string normalizedPhone, string fullName, CancellationToken cancellationToken = default);
 }
 
 public interface IAuditLogRepository

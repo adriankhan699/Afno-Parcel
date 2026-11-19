@@ -7,6 +7,7 @@ using NepalParcel.API.Options;
 using NepalParcel.API.Security;
 using NepalParcel.Application.Auth;
 using NepalParcel.Application.Common.Interfaces;
+using NepalParcel.Application.Tracking;
 using NepalParcel.API.Services;
 
 namespace NepalParcel.API.Extensions;
@@ -28,6 +29,7 @@ internal static class AuthExtensions
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
         services.AddScoped<IClientInfo, HttpClientInfo>();
         services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<ITrackingSecurity, TrackingSecurity>();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 
@@ -73,8 +75,38 @@ internal static class AuthExtensions
                         QueueLimit = 0,
                     });
             });
+
+            limiter.AddPolicy(RateLimitSettings.TrackingPolicy, context =>
+                PerIp(context, "tracking", c => c.RequestServices.GetRequiredService<IOptions<RateLimitSettings>>().Value.TrackingPermitPerMinute));
+            limiter.AddPolicy(RateLimitSettings.TrackingOtpPolicy, context =>
+                PerIp(context, "tracking-otp", c => c.RequestServices.GetRequiredService<IOptions<RateLimitSettings>>().Value.TrackingOtpPermitPerMinute));
+
+            limiter.AddPolicy(RateLimitSettings.BookingPolicy, context =>
+            {
+                var permit = context.RequestServices.GetRequiredService<IOptions<RateLimitSettings>>().Value.BookingPermitPerMinute;
+                // The user id cannot be read before authentication has run, so fall back to the client IP for anonymous quotes.
+                var key = context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    $"booking:{key}",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = permit,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                    });
+            });
         });
 
         return services;
     }
+
+    private static RateLimitPartition<string> PerIp(HttpContext context, string name, Func<HttpContext, int> permit) =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"{name}:{context.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permit(context),
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            });
 }

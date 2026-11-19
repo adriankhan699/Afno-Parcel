@@ -33,6 +33,11 @@ public sealed class NepalParcelApiFactory : WebApplicationFactory<Program>, IAsy
         // A throwaway signing key generated per test run: nothing secret is stored in the repository.
         builder.UseSetting("Jwt:SigningKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)));
         builder.UseSetting("RateLimiting:AuthPermitPerMinute", "100000");
+        builder.UseSetting("RateLimiting:BookingPermitPerMinute", "100000");
+        builder.UseSetting("RateLimiting:TrackingPermitPerMinute", "100000");
+        builder.UseSetting("RateLimiting:TrackingOtpPermitPerMinute", "100000");
+        builder.UseSetting("Booking:Receipt:CompanyName", "Afno Parcel Test Co");
+        builder.UseSetting("Booking:Receipt:CompanyPhone", "01-4000000");
 
         builder.ConfigureTestServices(services =>
         {
@@ -41,7 +46,9 @@ public sealed class NepalParcelApiFactory : WebApplicationFactory<Program>, IAsy
 
             services.AddDbContext<NepalParcelDbContext>((sp, options) => options
                 .UseSqlite(_connection)
-                .AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>()));
+                .AddInterceptors(
+                    sp.GetRequiredService<AuditableEntityInterceptor>(),
+                    sp.GetRequiredService<ParcelHistoryGuardInterceptor>()));
         });
     }
 
@@ -52,6 +59,9 @@ public sealed class NepalParcelApiFactory : WebApplicationFactory<Program>, IAsy
         await using var scope = Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<NepalParcelDbContext>();
         await db.Database.EnsureCreatedAsync();
+
+        // The same default service areas and development price list a fresh developer database gets.
+        await ReferenceDataSeeder.SeedAsync(db, DateTimeOffset.UtcNow.AddDays(-1));
     }
 
     async Task IAsyncLifetime.DisposeAsync()

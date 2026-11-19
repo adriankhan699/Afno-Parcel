@@ -1,6 +1,79 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { Alert } from '../components/form';
+import ProgressTracker from '../components/ProgressTracker';
+import Timeline from '../components/Timeline';
+import TrackingDetails from '../components/TrackingDetails';
+import { formatNepalDateTime } from '../lib/format';
+import { serviceLabel, statusLabel, statusTone } from '../lib/labels';
+import { timelineFromTracking } from '../lib/status';
 import { isValidTrackingNumber, normalizeTrackingNumber } from '../lib/tracking';
+import { useApi } from '../lib/useApi';
+import type { PublicTrackingResponse } from '../types/api';
+
+function PublicResult({ parcel }: { parcel: PublicTrackingResponse }) {
+  return (
+    <div className="space-y-6">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Tracking number</p>
+        <h2 className="font-mono text-2xl font-bold tracking-tight">{parcel.trackingNumber}</h2>
+
+        <p className="mt-3 flex flex-wrap items-center gap-2">
+          <span className={`rounded-full px-3 py-1 text-sm font-semibold ${statusTone(parcel.status)}`}>
+            {parcel.statusName || statusLabel(parcel.status)}
+          </span>
+          <span className="text-sm text-slate-600">{parcel.statusMessage}</span>
+        </p>
+
+        <dl className="mt-4 grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <dt className="text-xs text-slate-500">From</dt>
+            <dd className="font-medium text-slate-900">{parcel.originArea}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">To</dt>
+            <dd className="font-medium text-slate-900">{parcel.destinationArea}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Delivery type</dt>
+            <dd className="font-medium text-slate-900">{serviceLabel(parcel.serviceType)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">{parcel.deliveredAtUtc ? 'Delivered' : 'Estimated delivery'}</dt>
+            <dd className="font-medium text-slate-900">
+              {parcel.deliveredAtUtc
+                ? formatNepalDateTime(parcel.deliveredAtUtc)
+                : parcel.estimatedDeliveryAtUtc
+                  ? formatNepalDateTime(parcel.estimatedDeliveryAtUtc)
+                  : '—'}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section aria-labelledby="progress-heading" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 id="progress-heading" className="mb-4 text-base font-semibold text-slate-900">
+          Progress
+        </h2>
+        <ProgressTracker status={parcel.status} historyStatuses={parcel.events.map((e) => e.status)} />
+      </section>
+
+      <section aria-labelledby="history-heading" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 id="history-heading" className="mb-4 text-base font-semibold text-slate-900">
+          Parcel history
+        </h2>
+        <Timeline items={timelineFromTracking(parcel.events)} latest="first" label="Parcel history" />
+      </section>
+
+      <p className="text-xs text-slate-500">
+        Names, phone numbers and addresses are never shown here. Times are in Nepal time.
+      </p>
+
+      {/* Keyed by tracking number so the verification state never leaks from one parcel to another. */}
+      <TrackingDetails key={parcel.trackingNumber} trackingNumber={parcel.trackingNumber} />
+    </div>
+  );
+}
 
 export default function TrackParcelPage() {
   const { trackingNumber } = useParams();
@@ -8,10 +81,14 @@ export default function TrackParcelPage() {
   const [input, setInput] = useState(trackingNumber ?? '');
   const [error, setError] = useState<string | null>(null);
 
+  const normalized = trackingNumber ? normalizeTrackingNumber(trackingNumber) : null;
+  const formatOk = normalized !== null && isValidTrackingNumber(normalized);
+  const result = useApi<PublicTrackingResponse>(formatOk ? `/api/v1/tracking/${encodeURIComponent(normalized)}` : null);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!isValidTrackingNumber(input)) {
-      setError('Enter a valid tracking number (8–20 letters and digits).');
+      setError('Enter a valid tracking number: it starts with AFN and has 14 letters and digits.');
       return;
     }
     setError(null);
@@ -19,7 +96,7 @@ export default function TrackParcelPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-3xl">
       <h1 className="text-2xl font-bold tracking-tight">Track your parcel</h1>
       <p className="mt-2 text-sm text-slate-600">Enter the tracking number printed on your receipt.</p>
 
@@ -31,7 +108,7 @@ export default function TrackParcelPage() {
           id="tracking"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="e.g. NP12345678"
+          placeholder="e.g. AFNK7M2Q9XT4B3"
           autoComplete="off"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'tracking-error' : undefined}
@@ -50,14 +127,22 @@ export default function TrackParcelPage() {
         </p>
       )}
 
-      {trackingNumber && !error && (
-        <div className="mt-8 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          <p className="font-medium text-slate-900">Tracking {normalizeTrackingNumber(trackingNumber)}</p>
-          <p className="mt-1">
-            Parcel tracking goes live with the Parcels module in the next phase. This page is wired and ready.
-          </p>
-        </div>
-      )}
+      <div className="mt-8">
+        {trackingNumber && !formatOk && !error && (
+          <Alert>That does not look like one of our tracking numbers. Check it against your receipt and try again.</Alert>
+        )}
+        {formatOk && result.status === 'loading' && <p className="text-sm text-slate-500">Looking up your parcel…</p>}
+        {formatOk && result.status === 'error' && (
+          <Alert tone={result.httpStatus === 404 ? 'info' : 'error'}>
+            {result.httpStatus === 404
+              ? 'We could not find a parcel with that tracking number. Check it against your receipt and try again.'
+              : result.httpStatus === 429
+                ? 'Too many lookups from your connection. Please wait a minute and try again.'
+                : result.message}
+          </Alert>
+        )}
+        {formatOk && result.status === 'loaded' && <PublicResult parcel={result.data} />}
+      </div>
     </div>
   );
 }

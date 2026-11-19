@@ -35,6 +35,7 @@ internal sealed partial class GlobalExceptionHandler(
             ConflictException conflict => Create(StatusCodes.Status409Conflict, conflict.Title, conflict.Message),
             ConcurrencyException concurrency => Create(StatusCodes.Status409Conflict, concurrency.Title, concurrency.Message),
             UnauthorizedException unauthorized => Create(StatusCodes.Status401Unauthorized, unauthorized.Title, unauthorized.Message),
+            ForbiddenException forbidden => Create(StatusCodes.Status403Forbidden, forbidden.Title, forbidden.Message),
             DomainException domain => Create(StatusCodes.Status422UnprocessableEntity, "Business rule violated", domain.Message),
             BadHttpRequestException badRequest => Create(badRequest.StatusCode, "Bad request", badRequest.Message),
             _ => Create(StatusCodes.Status500InternalServerError, "Server error", "An unexpected error occurred. Please try again later."),

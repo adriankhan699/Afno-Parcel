@@ -21,6 +21,7 @@ try
     app.UseApiPipeline();
 
     await app.Services.InitializeDatabaseAsync();
+    await app.Services.SeedReferenceDataAsync();
     await app.Services.EnsureSuperAdminAsync();
     await app.RunAsync();
 }

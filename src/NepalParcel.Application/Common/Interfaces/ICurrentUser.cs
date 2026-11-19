@@ -10,6 +10,9 @@ public interface ICurrentUser
     string? UserName { get; }
 
     bool IsAuthenticated { get; }
+
+    /// <summary>Whether the signed-in user has the role. Always false when anonymous.</summary>
+    bool IsInRole(string role);
 }
 
 /// <summary>Information about the calling client, used for audit trails.</summary>

@@ -105,4 +105,19 @@ public sealed class PricingRule : AuditableEntity
         IsActive = false;
         EffectiveToUtc ??= endsAtUtc;
     }
+
+    /// <summary>Whether the rule is switched on and inside its validity period at <paramref name="atUtc"/>.</summary>
+    public bool IsEffectiveAt(DateTimeOffset atUtc) =>
+        IsActive && EffectiveFromUtc <= atUtc && (EffectiveToUtc is null || atUtc < EffectiveToUtc);
+
+    /// <summary>A weight band covers weights above its minimum, up to and including its maximum.</summary>
+    public bool CoversWeight(decimal weightKg) => weightKg > MinWeightKg && weightKg <= MaxWeightKg;
+
+    /// <summary>Whether the rule applies to the route. A null area on the rule means "any".</summary>
+    public bool MatchesRoute(Guid? originAreaId, Guid? destinationAreaId) =>
+        (FromServiceAreaId is null || FromServiceAreaId == originAreaId) &&
+        (ToServiceAreaId is null || ToServiceAreaId == destinationAreaId);
+
+    /// <summary>0, 1 or 2: how many of the origin and destination this rule names explicitly. More specific rules win.</summary>
+    public int Specificity => (FromServiceAreaId is null ? 0 : 1) + (ToServiceAreaId is null ? 0 : 1);
 }

@@ -15,6 +15,12 @@ public sealed class AddressDtoValidator : AbstractValidator<AddressDto>
             .WithMessage($"Province must be one of: {string.Join(", ", Enum.GetNames<Province>())}.");
 
         RuleFor(a => a.District).NotEmpty().MaximumLength(NepalAddress.DistrictMaxLength);
+        RuleFor(a => a.District)
+            .Must((a, district) => !Enum.TryParse<Province>(a.Province, ignoreCase: true, out var province)
+                                   || int.TryParse(a.Province, out _)
+                                   || NepalDistricts.Contains(province, district))
+            .When(a => !string.IsNullOrWhiteSpace(a.District))
+            .WithMessage(a => $"'{a.District}' is not a district of {a.Province} Province.");
         RuleFor(a => a.Municipality).NotEmpty().MaximumLength(NepalAddress.MunicipalityMaxLength);
         RuleFor(a => a.WardNumber).InclusiveBetween(1, NepalAddress.MaxWardNumber);
         RuleFor(a => a.StreetOrTole).MaximumLength(NepalAddress.StreetMaxLength);

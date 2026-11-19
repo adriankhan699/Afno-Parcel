@@ -9,6 +9,13 @@ internal sealed class BranchRepository(NepalParcelDbContext dbContext) : IBranch
     public Task<Branch?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.Branches.FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, Branch>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default) =>
+        await dbContext.Branches
+            .AsNoTracking()
+            .Where(b => ids.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, cancellationToken)
+            .ConfigureAwait(false);
+
     public Task<bool> CodeExistsAsync(string code, CancellationToken cancellationToken = default) =>
         dbContext.Branches.AnyAsync(b => b.Code == code, cancellationToken);
 

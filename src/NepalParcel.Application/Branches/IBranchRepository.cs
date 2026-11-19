@@ -7,6 +7,8 @@ public interface IBranchRepository
 {
     Task<Branch?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyDictionary<Guid, Branch>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default);
+
     Task<bool> CodeExistsAsync(string code, CancellationToken cancellationToken = default);
 
     Task<(IReadOnlyList<Branch> Items, int TotalCount)> GetPageAsync(

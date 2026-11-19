@@ -14,6 +14,8 @@ internal sealed class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) 
     public string? UserName => httpContextAccessor.HttpContext?.User.FindFirst("name")?.Value ?? Anonymous;
 
     public bool IsAuthenticated => httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated ?? false;
+
+    public bool IsInRole(string role) => httpContextAccessor.HttpContext?.User.IsInRole(role) ?? false;
 }
 
 internal sealed class HttpClientInfo(IHttpContextAccessor httpContextAccessor) : IClientInfo

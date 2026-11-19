@@ -4,10 +4,14 @@ Courier management platform for our own parcel delivery company in Nepal: online
 tracking-number based parcel tracking, staff-driven status updates, Nepal addresses and NPR currency,
 built to grow into multiple branches and warehouses.
 
-> **Status: Phase 2 — database design and authentication.** The full relational model (21 business tables plus
-> ASP.NET Core Identity) with an EF Core migration, seed data, and JWT authentication with refresh-token rotation and
-> role-based authorization are in place. Parcel booking/tracking, payments and notifications **use** these tables in later
-> phases. See [docs/database.md](docs/database.md) for the data model.
+> **Status: Phase 4 — status tracking.** Staff move parcels through a controlled workflow (booking created → picked up → shipped → in transit → arrived at warehouse → out for delivery → delivered, with failure, return and cancel paths). Every change adds an append-only history row (previous status, new status, staff user, branch or warehouse, time, remarks). Customers track parcels publicly without seeing any personal data, and get detailed tracking with a one-time code sent to the receiver or by signing in. Warehouse staff have a scan API. See [docs/tracking.md](docs/tracking.md).
+>
+> **Phase 3 — parcel booking management.** Customers book parcels on the website and counter staff book for
+> walk-in customers. Every booking gets a unique tracking number and a delivery charge that the **server** calculates from
+> configurable pricing rules (prepaid and cash-on-delivery, VAT, volumetric weight). Bookings can be searched, filtered,
+> paged, cancelled under business rules, and printed as a receipt. See [docs/booking.md](docs/booking.md).
+> Phase 2 (database and authentication) is described in [docs/database.md](docs/database.md). Status updates and public
+> tracking, payment gateways and notifications **use** these tables in later phases.
 
 ## Tech stack
 
@@ -176,6 +180,11 @@ Integration tests boot the real API with an in-memory SQLite database, so they n
 | `Jwt:AccessTokenMinutes`, `Jwt:RefreshTokenDays` | Token lifetimes. Defaults: 15 minutes and 7 days. |
 | `Bootstrap:SuperAdmin:Email` / `:Password` | Optional first-run SuperAdmin. Both must be set or nothing is created. Remove the password after the first start. |
 | `RateLimiting:AuthPermitPerMinute` | Requests per IP per minute for register/login/refresh/logout (default 10). Behind a reverse proxy, configure forwarded headers so the client IP is seen. |
+| `RateLimiting:TrackingPermitPerMinute`, `RateLimiting:TrackingOtpPermitPerMinute` | Public tracking lookups (default 60) and one-time code requests/verifications (default 10) per client IP per minute. |
+| `Tracking:*` | One-time code lifetime (10 min), wrong guesses allowed (5), codes per parcel per hour (3), access token lifetime (15 min). `Tracking:LogCodes` writes each code to the log so developers can test without an SMS provider: **on only in `appsettings.Development.json`, never in production**. See [docs/tracking.md](docs/tracking.md). |
+| `RateLimiting:BookingPermitPerMinute` | Quotes, bookings, cancellations and payment confirmations per signed-in user (or IP when anonymous) per minute (default 30). |
+| `Booking:*` | VAT (`VatPercent`, default 13), volumetric divisor (5000), weight step (0.5 kg), `MaxWeightKg`, `MaxDimensionCm`, `MaxDeclaredValue`, `MaxCodAmount`, and the receipt header (`Booking:Receipt:CompanyName`, `CompanyPhone`, `CompanyTaxNumber`). Not secrets. See [docs/booking.md](docs/booking.md). |
+| `Database:SeedReferenceData` | `true` only in `appsettings.Development.json` / compose: fills **empty** `ServiceAreas` (77 districts) and `PricingRules` (development price list). Keep `false` in production and enter real prices through `/api/v1/pricing/rules`. |
 | `Database:ApplyMigrationsOnStartup` | `true` only in `appsettings.Development.json` / compose. Keep `false` in production. |
 | `Cors:AllowedOrigins` | Allowed browser origins. Empty by default (same-origin via reverse proxy). |
 | `Swagger:Enabled` | On in Development, off otherwise unless explicitly enabled. |
@@ -215,7 +224,17 @@ SuperAdmin; the first SuperAdmin comes from the optional bootstrap configuration
 | `GET /api/v1/auth/me` | Any signed-in user (own profile only) |
 | `POST /api/v1/admin/users` | `SuperAdmin` |
 | `POST /api/v1/branches` | `SuperAdmin`, `BranchManager` |
-| `GET /api/v1/branches…` | Anyone (branch locations are public) |
+| `GET /api/v1/branches…`, `GET /api/v1/service-areas`, `POST /api/v1/pricing/quote` | Anyone (public information; the quote is rate limited) |
+| `POST /api/v1/parcels`, `POST /api/v1/parcels/{id}/cancel` | `Customer` (own parcels), counter staff: `BookingStaff`, `BranchManager`, `SuperAdmin` |
+| `GET /api/v1/parcels…` (list, details, tracking lookup, receipt) | `Customer` (own parcels only), `SuperAdmin`, `BranchManager`, `BookingStaff`, `WarehouseStaff`, `Accountant` (all parcels) |
+| `POST /api/v1/parcels/{id}/confirm-payment` | Counter staff |
+| `GET /api/v1/tracking/{number}`, `POST …/otp`, `POST …/verify` | Anyone (rate limited; no personal data in the answers) |
+| `GET /api/v1/tracking/{number}/details` | A receiver with a verified-code token (`X-Tracking-Access`), or a signed-in sender (own parcels) or staff |
+| `POST /api/v1/parcels/{id}/status`, `…/tracking/{number}/status` | `SuperAdmin`, `BranchManager`, `BookingStaff`, `WarehouseStaff`, `DeliveryAgent`; each role only for the statuses its job needs |
+| `POST /api/v1/scans`, `/scans/batch` | `SuperAdmin`, `BranchManager`, `WarehouseStaff` |
+| `GET /api/v1/warehouses` / `POST /api/v1/warehouses` | Status staff / `SuperAdmin`, `BranchManager` |
+| `GET /api/v1/pricing/rules` | `SuperAdmin`, `BranchManager`, `Accountant` |
+| `POST /api/v1/pricing/rules`, `…/{id}/deactivate` | `SuperAdmin` |
 
 ## API overview
 
@@ -230,11 +249,29 @@ SuperAdmin; the first SuperAdmin comes from the optional bootstrap configuration
 | GET  | `/api/v1/branches?page=1&pageSize=20` | Paged list of branches |
 | GET  | `/api/v1/branches/{id}` | Branch by id |
 | POST | `/api/v1/branches` | Create branch / head office (SuperAdmin, BranchManager) |
+| POST | `/api/v1/pricing/quote` | Delivery charge and estimate for a parcel, without booking (public) |
+| GET  | `/api/v1/service-areas` | The 77 districts we deliver to, with typical delivery days (public) |
+| POST | `/api/v1/parcels` | Book a parcel (201). The charge is calculated by the server; any price sent is ignored |
+| GET  | `/api/v1/parcels?search=&status=&serviceType=&paymentMethod=&channel=&isCod=&originBranchId=&bookedFrom=&bookedTo=&page=&pageSize=` | Search, filter and page parcels (newest first) |
+| GET  | `/api/v1/parcels/{id}`, `/api/v1/parcels/tracking/{trackingNumber}` | Parcel details with its status history |
+| GET  | `/api/v1/parcels/{id}/receipt` | Printable booking receipt data |
+| POST | `/api/v1/parcels/{id}/cancel` | Cancel a booking (reason required; rules in [docs/booking.md](docs/booking.md)) |
+| POST | `/api/v1/parcels/{id}/confirm-payment` | Mark a pending prepaid charge as paid (counter staff) |
+| GET/POST | `/api/v1/pricing/rules`, `/api/v1/pricing/rules/{id}/deactivate` | List, add and switch off pricing rules |
+| GET  | `/api/v1/tracking/{trackingNumber}` | Public tracking: status, districts, estimate, timeline (no personal data) |
+| POST | `/api/v1/tracking/{trackingNumber}/otp` | Send a 6-digit code to the receiver (always 202, reveals nothing) |
+| POST | `/api/v1/tracking/{trackingNumber}/verify` | Check the code, get a short-lived `X-Tracking-Access` token |
+| GET  | `/api/v1/tracking/{trackingNumber}/details` | Detailed tracking (token, or signed-in sender/staff) |
+| POST | `/api/v1/parcels/{id}/status` | Staff: move a parcel to its next status (workflow, role and data rules enforced) |
+| POST | `/api/v1/scans`, `/api/v1/scans/batch` | Warehouse scans: Arrival, Dispatch, OutForDelivery (batch up to 100) |
+| GET/POST | `/api/v1/warehouses` | List / register warehouses |
 | GET  | `/health/live` | Liveness probe |
 | GET  | `/health/ready` | Readiness probe (database) |
 
 Errors are always `application/problem+json`: `400` validation, `401` not signed in / bad credentials / bad refresh
-token, `403` wrong role, `409` duplicate or concurrency conflict, `429` rate limited.
+token, `403` wrong role, `404` not found (also used when a customer asks for someone else's parcel), `409` duplicate or
+concurrency conflict, `422` a business rule refused the request (e.g. "we do not deliver there yet", "too late to
+cancel"), `429` rate limited.
 
 Time: every timestamp in the API and database is **UTC** (`...Z` / `datetimeoffset`). Convert for display with
 `NepalTime` (backend) or `formatNepalDateTime` (frontend) — Asia/Kathmandu, UTC+05:45, no daylight saving.

@@ -8,7 +8,6 @@ import {
   OutForDeliveryIllustration,
   TransitIllustration,
 } from '../components/illustrations/StepIllustrations';
-import { formatNpr } from '../lib/format';
 
 interface JourneyStep {
   status: string;
@@ -20,15 +19,15 @@ interface JourneyStep {
 // The stages customers will see when tracking a parcel. Staff move a parcel from one stage to the next.
 const journey: JourneyStep[] = [
   {
-    status: 'Booked',
+    status: 'Booking created',
     title: 'Book your parcel',
     body: 'Book on our website, or visit any branch and our staff will book it for you.',
     Illustration: BookIllustration,
   },
   {
-    status: 'Received at branch',
-    title: 'Drop it at a branch',
-    body: 'We weigh it, confirm the price in NPR, and give you a tracking number.',
+    status: 'Picked up',
+    title: 'Hand it over',
+    body: 'We collect it or receive it at a branch, weigh it and confirm the price in NPR, then ship it.',
     Illustration: BranchIllustration,
   },
   {
@@ -76,8 +75,7 @@ export default function HomePage() {
             Parcels delivered across all seven provinces of Nepal
           </h1>
           <p className="mt-4 max-w-xl text-white/85">
-            From Mechi to Mahakali, send documents and packages with clear pricing starting at{' '}
-            {formatNpr(100)}.
+            From Mechi to Mahakali, send documents and packages. See the price in NPR before you confirm your booking.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
@@ -86,12 +84,12 @@ export default function HomePage() {
             >
               Track a parcel
             </Link>
-            <span
-              className="cursor-not-allowed rounded-lg border border-white/40 px-5 py-2.5 text-sm font-semibold text-white/70"
-              title="Online booking arrives in the next phase"
+            <Link
+              to="/book"
+              className="rounded-lg border border-white/60 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/10"
             >
-              Book a parcel (coming soon)
-            </span>
+              Book a parcel
+            </Link>
           </div>
         </div>
         <HeroIllustration className="w-full drop-shadow-xl" />

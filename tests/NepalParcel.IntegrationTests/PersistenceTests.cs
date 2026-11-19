@@ -5,6 +5,8 @@ using NepalParcel.Domain.Common;
 using NepalParcel.Domain.Customers;
 using NepalParcel.Domain.Identity;
 using NepalParcel.Domain.Parcels;
+using NepalParcel.Domain.Payments;
+using NepalParcel.Domain.Pricing;
 using NepalParcel.Infrastructure.Persistence;
 using NepalParcel.IntegrationTests.Infrastructure;
 
@@ -25,15 +27,15 @@ public sealed class PersistenceTests(NepalParcelApiFactory factory) : IClassFixt
         var statuses = await db.ParcelStatuses.OrderBy(s => s.Id).ToListAsync();
 
         Assert.Equal(Roles.All.Order(StringComparer.Ordinal), roles.Order(StringComparer.Ordinal));
-        Assert.Equal(11, statuses.Count);
-        Assert.Equal("Booked", statuses[0].Code);
+        Assert.Equal(10, statuses.Count);
+        Assert.Equal("BookingCreated", statuses[0].Code);
         Assert.Equal(["Delivered", "Returned", "Cancelled"], statuses.Where(s => s.IsTerminal).Select(s => s.Code).ToArray());
     }
 
     [Fact]
     public async Task Parcel_RoundTrips_WithItemsHistoryAndAddress()
     {
-        var (parcelId, tracking) = await SaveParcelAsync(statusChanges: 2);
+        var (parcelId, tracking) = await SaveParcelAsync(statusChanges: 3);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<NepalParcelDbContext>();
@@ -42,9 +44,9 @@ public sealed class PersistenceTests(NepalParcelApiFactory factory) : IClassFixt
         Assert.Equal(tracking, parcel.TrackingNumber);
         Assert.Equal(ParcelStatusCode.InTransit, parcel.Status);
         Assert.Equal(2, parcel.Items.Count);
-        Assert.Equal(3, parcel.StatusHistory.Count);
+        Assert.Equal(4, parcel.StatusHistory.Count);
         Assert.Equal("Kathmandu", parcel.ReceiverAddress.District);
-        Assert.Equal(1500.50m, parcel.DeliveryCharge);
+        Assert.Equal(1469m, parcel.DeliveryCharge);
         Assert.Equal(2.250m, parcel.WeightKg);
         Assert.Equal("anonymous", parcel.CreatedBy);
         Assert.NotEqual(default, parcel.CreatedAtUtc);
@@ -126,10 +128,10 @@ public sealed class PersistenceTests(NepalParcelApiFactory factory) : IClassFixt
         var parcel = NewParcel(tracking, customer.Id, branch.Id);
         parcel.AddItem("Books", 2, 0.5m, 400m, "Stationery");
         parcel.AddItem("Clothes", 1, 1.25m, 2500m, isFragile: false);
-        var steps = new[] { ParcelStatusCode.ReceivedAtBranch, ParcelStatusCode.InTransit };
+        var steps = new[] { ParcelStatusCode.PickedUp, ParcelStatusCode.Shipped, ParcelStatusCode.InTransit };
         foreach (var step in steps.Take(statusChanges))
         {
-            parcel.ChangeStatus(step, Now.AddHours(1), null, "Staff");
+            parcel.ChangeStatus(step, Now.AddHours(1), null, "Staff", branchId: branch.Id);
         }
 
         db.Parcels.Add(parcel);
@@ -139,8 +141,27 @@ public sealed class PersistenceTests(NepalParcelApiFactory factory) : IClassFixt
 
     private static Parcel NewParcel(string tracking, Guid customerId, Guid branchId) =>
         Parcel.Book(
-            tracking, customerId, "Receiver Name", "9851000000", NepalAddress.Create(Province.Bagmati, "Kathmandu", "Kathmandu Metropolitan City", 5),
-            branchId, null, ServiceType.Express, BookingChannel.Online, 2.25m, 3300m, 1500.50m, 0m, Now);
+            new NewParcelDetails
+            {
+                TrackingNumber = tracking,
+                SenderCustomerId = customerId,
+                SenderName = "Sender Test",
+                SenderPhone = "9841000003",
+                SenderAddress = TestAddress(),
+                ReceiverName = "Receiver Name",
+                ReceiverPhone = "9851000000",
+                ReceiverAddress = NepalAddress.Create(Province.Bagmati, "Kathmandu", "Kathmandu Metropolitan City", 5),
+                OriginBranchId = branchId,
+                ServiceType = ServiceType.Express,
+                Channel = BookingChannel.Online,
+                Description = "Books and clothes",
+                Quantity = 3,
+                WeightKg = 2.25m,
+                DeclaredValue = 3300m,
+                PaymentMethod = PaymentMethod.Cash,
+                Price = new PriceBreakdown(2.25m, 0m, 2.5m, 1000m, 300m, 1300m, 0m, 13m, 169m, 1469m),
+            },
+            Now);
 
     private static NepalAddress TestAddress() =>
         NepalAddress.Create(Province.Gandaki, "Kaski", "Pokhara Metropolitan City", 8, "Lakeside");

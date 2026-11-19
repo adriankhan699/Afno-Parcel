@@ -16,6 +16,12 @@ public sealed class DatabaseOptions
     /// <summary>Applies pending EF Core migrations at startup. Intended for development/Docker only.</summary>
     public bool ApplyMigrationsOnStartup { get; set; }
 
+    /// <summary>
+    /// Inserts the default service areas (all 77 districts) and development pricing rules when those tables are empty.
+    /// Intended for development and demos; production prices should be entered through the pricing API.
+    /// </summary>
+    public bool SeedReferenceData { get; set; }
+
     [Range(1, 600)]
     public int CommandTimeoutSeconds { get; set; } = 30;
 

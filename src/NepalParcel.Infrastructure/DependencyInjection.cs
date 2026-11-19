@@ -6,6 +6,8 @@ using Microsoft.Extensions.Options;
 using NepalParcel.Application.Auth;
 using NepalParcel.Application.Branches;
 using NepalParcel.Application.Common.Interfaces;
+using NepalParcel.Application.Parcels;
+using NepalParcel.Application.Tracking;
 using NepalParcel.Infrastructure.Identity;
 using NepalParcel.Infrastructure.Persistence;
 using NepalParcel.Infrastructure.Persistence.Interceptors;
@@ -34,6 +36,7 @@ public static class DependencyInjection
             .ValidateOnStart();
 
         services.AddScoped<AuditableEntityInterceptor>();
+        services.AddSingleton<ParcelHistoryGuardInterceptor>();
 
         services.AddDbContext<NepalParcelDbContext>((sp, options) =>
         {
@@ -49,7 +52,9 @@ public static class DependencyInjection
                 }
             });
 
-            options.AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>());
+            options.AddInterceptors(
+                sp.GetRequiredService<AuditableEntityInterceptor>(),
+                sp.GetRequiredService<ParcelHistoryGuardInterceptor>());
 
             if (db.EnableSensitiveDataLogging)
             {
@@ -64,6 +69,12 @@ public static class DependencyInjection
 
         // Module repositories.
         services.AddScoped<IBranchRepository, BranchRepository>();
+        services.AddScoped<IParcelRepository, ParcelRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IPricingRepository, PricingRepository>();
+        services.AddScoped<IWarehouseRepository, WarehouseRepository>();
+        services.AddScoped<ITrackingOtpRepository, TrackingOtpRepository>();
+        services.AddScoped<INotificationOutboxRepository, NotificationOutboxRepository>();
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();

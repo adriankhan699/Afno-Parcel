@@ -64,4 +64,40 @@ public sealed class ServiceArea : AuditableEntity
     }
 
     public void SetServiceable(bool isServiceable) => IsServiceable = isServiceable;
+
+    public void SetServingBranch(Guid? branchId) => ServingBranchId = branchId;
+}
+
+/// <summary>Finds the service area an address belongs to.</summary>
+public static class ServiceAreaResolver
+{
+    /// <summary>
+    /// A municipality-level area wins over the district-wide area. Returns null when the address is in neither.
+    /// </summary>
+    public static ServiceArea? Resolve(IEnumerable<ServiceArea> areas, NepalAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(areas);
+        ArgumentNullException.ThrowIfNull(address);
+
+        ServiceArea? districtWide = null;
+        foreach (var area in areas)
+        {
+            if (area.Province != address.Province ||
+                !string.Equals(area.District, address.District, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (area.Municipality is null)
+            {
+                districtWide ??= area;
+            }
+            else if (string.Equals(area.Municipality, address.Municipality, StringComparison.OrdinalIgnoreCase))
+            {
+                return area;
+            }
+        }
+
+        return districtWide;
+    }
 }

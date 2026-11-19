@@ -44,14 +44,19 @@ describe('formatAddress', () => {
 
 describe('tracking numbers', () => {
   it('normalizes spaces, dashes and case', () => {
-    expect(normalizeTrackingNumber(' np-1234 5678 ')).toBe('NP12345678');
+    expect(normalizeTrackingNumber(' afn-k7m2 q9xt4b3 ')).toBe('AFNK7M2Q9XT4B3');
   });
 
   it.each([
-    ['NP12345678', true],
-    ['np-1234-5678', true],
+    ['AFNK7M2Q9XT4B3', true],
+    ['afn-k7m2-q9xt4b3', true],
+    ['AFN K7M2Q9XT4B3', true],
     ['SHORT', false],
-    ['NP1234567$', false],
+    ['NP12345678', false], // old scheme / wrong prefix
+    ['AFNK7M2Q9XT4B', false], // 13 characters
+    ['AFNK7M2Q9XT4B33', false], // 15 characters
+    ['AFNK7M2Q9XT4B$', false], // symbol
+    ['AFN0O1ILQ9XT4B', false], // look-alike characters are not in the alphabet
   ])('validates %s → %s', (input, expected) => {
     expect(isValidTrackingNumber(input)).toBe(expected);
   });

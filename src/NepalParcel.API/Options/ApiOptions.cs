@@ -34,8 +34,23 @@ public sealed class RateLimitSettings
 {
     public const string SectionName = "RateLimiting";
     public const string AuthPolicy = "auth";
+    public const string BookingPolicy = "booking";
+    public const string TrackingPolicy = "tracking";
+    public const string TrackingOtpPolicy = "tracking-otp";
 
     /// <summary>Requests per client IP per minute to register/login/refresh/logout.</summary>
     [Range(1, 100000)]
     public int AuthPermitPerMinute { get; set; } = 10;
+
+    /// <summary>Price quotes, bookings, cancellations and payment confirmations per signed-in user (or client IP when anonymous) per minute.</summary>
+    [Range(1, 100000)]
+    public int BookingPermitPerMinute { get; set; } = 30;
+
+    /// <summary>Public tracking lookups per client IP per minute.</summary>
+    [Range(1, 100000)]
+    public int TrackingPermitPerMinute { get; set; } = 60;
+
+    /// <summary>One-time code requests and verifications per client IP per minute.</summary>
+    [Range(1, 100000)]
+    public int TrackingOtpPermitPerMinute { get; set; } = 10;
 }

@@ -126,8 +126,8 @@ Personal data lives in `Customers` (name, phone, email, address), `Parcels` (rec
 Applied by the migration (`HasData`), so every environment gets the same ids:
 
 - **Roles** (`identity.Roles`): SuperAdmin, BranchManager, BookingStaff, WarehouseStaff, DeliveryAgent, Accountant, Customer.
-- **ParcelStatuses**: 1 Booked, 2 PickedUp, 3 ReceivedAtBranch, 4 InTransit, 5 ReceivedAtWarehouse, 6 OutForDelivery,
-  7 Delivered*, 8 DeliveryFailed, 9 ReturnToSender, 10 Returned*, 11 Cancelled* (\* terminal).
+- **ParcelStatuses**: 1 BookingCreated, 2 PickedUp, 3 Shipped, 4 InTransit, 5 ArrivedAtWarehouse, 6 OutForDelivery,
+  7 Delivered*, 8 DeliveryFailed, 10 Returned*, 11 Cancelled* (\* terminal). Id 9 is retired and never reused.
 
 No users or credentials are seeded. The only way to create the first administrator is the optional
 `Bootstrap:SuperAdmin` configuration described in the README.
@@ -138,6 +138,8 @@ No users or credentials are seeded. The only way to create the first administrat
 |-----------|----------|
 | `InitialCreate` | Phase 1: `Branches` |
 | `Phase2_DomainAndIdentity` | Everything above, Identity tables, indexes, constraints, seed data |
+| `Phase3_ParcelBooking` | `Parcels` gains the sender snapshot (name, phone, address, instructions), receiver instructions, description, quantity, dimensions, volumetric/chargeable weight, payment method, the price breakdown (base, weight charge, COD fee, VAT %, VAT) and the pricing rule used; new check constraint `CK_Parcels_Booking` and indexes on `SenderPhone` and `BookedAtUtc`. See [booking.md](booking.md). |
+| `Phase4_StatusTracking` | New status set (renames ids 1, 3 and 5, removes id 9; ids are never renumbered), new table `TrackingOtps` (hashed one-time codes for receiver verification). Existing history rows keep their ids. See [tracking.md](tracking.md). |
 
 Create and apply: see the README. The model for tests (SQLite) differs only in two provider details: `rowversion`
 is not generated and `nvarchar(max)` columns use SQLite's default text type.

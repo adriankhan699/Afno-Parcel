@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NepalParcel.Domain.Auditing;
 using NepalParcel.Domain.Branches;
 using NepalParcel.Domain.Customers;
@@ -12,6 +13,7 @@ using NepalParcel.Domain.Notifications;
 using NepalParcel.Domain.Parcels;
 using NepalParcel.Domain.Payments;
 using NepalParcel.Domain.Pricing;
+using NepalParcel.Domain.Tracking;
 using NepalParcel.Domain.Warehouses;
 using NepalParcel.Infrastructure.Identity;
 
@@ -72,6 +74,8 @@ public sealed class NepalParcelDbContext(DbContextOptions<NepalParcelDbContext> 
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<TrackingOtp> TrackingOtps => Set<TrackingOtp>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -107,10 +111,26 @@ public sealed class NepalParcelDbContext(DbContextOptions<NepalParcelDbContext> 
 
         if (Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true)
         {
-            // SQLite is used only by the integration tests. It has no rowversion type and does not understand
-            // 'nvarchar(max)', so adapt those two things; everything else in the model is identical to production.
+            // SQLite is used only by the integration tests. It has no rowversion type, does not understand
+            // 'nvarchar(max)' and cannot sort or compare DateTimeOffset values, and stores decimals as text, so adapt those four things;
+            // everything else in the model is identical to production.
             foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetProperties()))
             {
+                var clrType = Nullable.GetUnderlyingType(property.ClrType) ?? property.ClrType;
+                if (clrType == typeof(DateTimeOffset))
+                {
+                    // UTC ticks: exact to 100 ns, so values round-trip unchanged, and they sort and compare numerically.
+                    property.SetValueConverter(new ValueConverter<DateTimeOffset, long>(
+                        v => v.UtcTicks,
+                        v => new DateTimeOffset(v, TimeSpan.Zero)));
+                }
+                else if (clrType == typeof(decimal))
+                {
+                    // SQLite stores decimals as text, which compares '100.000' < '20.000'. Numbers keep check constraints,
+                    // comparisons and sorting correct, as they are on SQL Server.
+                    property.SetValueConverter(new ValueConverter<decimal, double>(v => (double)v, v => (decimal)v));
+                }
+
                 if (property.IsConcurrencyToken && property.ClrType == typeof(byte[]))
                 {
                     property.ValueGenerated = ValueGenerated.Never;

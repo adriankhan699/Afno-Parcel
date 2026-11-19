@@ -56,6 +56,17 @@ public sealed class UnauthorizedException : AppException
     public override string Title => "Unauthorized";
 }
 
+/// <summary>The caller is signed in but their role does not allow this action.</summary>
+public sealed class ForbiddenException : AppException
+{
+    public ForbiddenException(string message)
+        : base(message)
+    {
+    }
+
+    public override string Title => "Forbidden";
+}
+
 /// <summary>The request failed validation. Errors are keyed by property name.</summary>
 public sealed class RequestValidationException : AppException
 {

@@ -31,6 +31,11 @@ internal sealed class CustomerRepository(NepalParcelDbContext dbContext) : ICust
 
     public Task<Customer?> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default) =>
         dbContext.Customers.FirstOrDefaultAsync(c => c.UserId == userId, cancellationToken);
+
+    public Task<Customer?> FindWalkInAsync(string normalizedPhone, string fullName, CancellationToken cancellationToken = default) =>
+        dbContext.Customers.FirstOrDefaultAsync(
+            c => c.UserId == null && c.PhoneNumber == normalizedPhone && c.FullName == fullName,
+            cancellationToken);
 }
 
 internal sealed class AuditLogRepository(NepalParcelDbContext dbContext) : IAuditLogRepository

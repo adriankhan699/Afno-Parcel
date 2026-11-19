@@ -15,6 +15,14 @@ public static class AuditActions
     public const string Create = "Create";
     public const string Update = "Update";
     public const string Delete = "Delete";
+    public const string ParcelBooked = "ParcelBooked";
+    public const string ParcelCancelled = "ParcelCancelled";
+    public const string ParcelStatusChanged = "ParcelStatusChanged";
+    public const string TrackingOtpRequested = "TrackingOtpRequested";
+    public const string TrackingOtpVerified = "TrackingOtpVerified";
+    public const string PaymentConfirmed = "PaymentConfirmed";
+    public const string PricingRuleCreated = "PricingRuleCreated";
+    public const string PricingRuleDeactivated = "PricingRuleDeactivated";
 }
 
 /// <summary>
