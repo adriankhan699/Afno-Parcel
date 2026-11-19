@@ -66,6 +66,12 @@ public sealed class NepalParcelDbContext(DbContextOptions<NepalParcelDbContext> 
 
     public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
 
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+
+    public DbSet<NotificationOptOut> NotificationOptOuts => Set<NotificationOptOut>();
+
+    public DbSet<MockProviderMessage> MockProviderMessages => Set<MockProviderMessage>();
+
     public DbSet<PricingRule> PricingRules => Set<PricingRule>();
 
     public DbSet<ServiceArea> ServiceAreas => Set<ServiceArea>();
@@ -75,6 +81,16 @@ public sealed class NepalParcelDbContext(DbContextOptions<NepalParcelDbContext> 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public DbSet<TrackingOtp> TrackingOtps => Set<TrackingOtp>();
+
+    public DbSet<ParcelMovement> ParcelMovements => Set<ParcelMovement>();
+
+    public DbSet<ParcelScan> ParcelScans => Set<ParcelScan>();
+
+    public DbSet<StaffAssignment> StaffAssignments => Set<StaffAssignment>();
+
+    public DbSet<DeliveryOtp> DeliveryOtps => Set<DeliveryOtp>();
+
+    public DbSet<TestGatewaySession> TestGatewaySessions => Set<TestGatewaySession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

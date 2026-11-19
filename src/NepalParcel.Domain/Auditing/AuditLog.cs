@@ -18,11 +18,47 @@ public static class AuditActions
     public const string ParcelBooked = "ParcelBooked";
     public const string ParcelCancelled = "ParcelCancelled";
     public const string ParcelStatusChanged = "ParcelStatusChanged";
+    public const string BranchCreated = "BranchCreated";
+    public const string BranchUpdated = "BranchUpdated";
+    public const string BranchActivated = "BranchActivated";
+    public const string BranchDeactivated = "BranchDeactivated";
+    public const string WarehouseCreated = "WarehouseCreated";
+    public const string WarehouseUpdated = "WarehouseUpdated";
+    public const string WarehouseActivated = "WarehouseActivated";
+    public const string WarehouseDeactivated = "WarehouseDeactivated";
+    public const string StaffAssigned = "StaffAssigned";
+    public const string StaffUnassigned = "StaffUnassigned";
     public const string TrackingOtpRequested = "TrackingOtpRequested";
     public const string TrackingOtpVerified = "TrackingOtpVerified";
     public const string PaymentConfirmed = "PaymentConfirmed";
     public const string PricingRuleCreated = "PricingRuleCreated";
     public const string PricingRuleDeactivated = "PricingRuleDeactivated";
+    public const string PaymentInitiated = "PaymentInitiated";
+    public const string PaymentVerified = "PaymentVerified";
+    public const string PaymentFailed = "PaymentFailed";
+    public const string PaymentVerificationMismatch = "PaymentMismatch";
+    public const string PaymentDuplicateCharge = "PaymentDuplicate";
+    public const string NotificationRequeued = "NotificationRequeued";
+    public const string NotificationCancelled = "NotificationCancelled";
+    public const string NotificationTemplateUpdated = "NotificationTemplate";
+    public const string NotificationOptOutAdded = "NotificationOptOut";
+    public const string NotificationOptOutRemoved = "NotificationOptIn";
+    public const string NotificationPreferencesChanged = "NotificationPrefs";
+    public const string OfficeCashRecorded = "OfficeCashRecorded";
+    public const string SettlementSubmitted = "SettlementSubmitted";
+    public const string SettlementVerified = "SettlementVerified";
+    public const string SettlementDisputed = "SettlementDisputed";
+    public const string SettlementResolved = "SettlementResolved";
+    public const string AgentCreated = "AgentCreated";
+    public const string AgentUpdated = "AgentUpdated";
+    public const string AgentActivated = "AgentActivated";
+    public const string AgentDeactivated = "AgentDeactivated";
+    public const string DeliveryAssigned = "DeliveryAssigned";
+    public const string DeliveryAssignmentCancelled = "DeliveryAssignmentCancelled";
+    public const string DeliveryCodeSent = "DeliveryCodeSent";
+    public const string DeliveryProofRecorded = "DeliveryProofRecorded";
+    public const string CodCollected = "CodCollected";
+    public const string ParcelReturnedToWarehouse = "ParcelReturnedToWarehouse";
 }
 
 /// <summary>

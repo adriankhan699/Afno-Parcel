@@ -72,7 +72,9 @@ Other rules enforced by the domain, on every change:
 | `Delivered`, `DeliveryFailed` | SuperAdmin, BranchManager, DeliveryAgent |
 | `Returned` | SuperAdmin, BranchManager, WarehouseStaff |
 
-Customers and accountants can never change a status. A role that may not make a change gets `403` before the parcel is even
+Delivery agents appear nowhere in this table since Phase 6: they can change a parcel's status only on parcels assigned to them,
+through the agent API, which also collects the proof of delivery and the cash (see [delivery.md](delivery.md)). Customers and
+accountants can never change a status. A role that may not make a change gets `403` before the parcel is even
 looked up, so it learns nothing about it. The same table is used by the scan API.
 
 ## The history is append-only
@@ -100,15 +102,16 @@ Staff see who made each change; customers see the same journey without staff nam
 |--------|-------|-------|
 | POST | `/api/v1/parcels/{id}/status` | `{ "status": "Shipped", "remarks": "...", "branchId": "..." }` |
 | POST | `/api/v1/parcels/tracking/{trackingNumber}/status` | the same, for staff who only have a label |
-| POST | `/api/v1/scans` | one scan: `{ "trackingNumber", "scanType", "warehouseId", "remarks" }` |
-| POST | `/api/v1/scans/batch` | `{ "scanType", "warehouseId", "trackingNumbers": [...] }`, 1–100 |
-| GET / POST | `/api/v1/warehouses` | list (status staff) / register (SuperAdmin, BranchManager) |
+| POST | `/api/v1/scans`, `/api/v1/scans/batch` | warehouse scans (Phase 5, see [network.md](network.md)) |
+| GET / POST | `/api/v1/warehouses` | list (staff) / register (SuperAdmin, BranchManager of the branch) |
 
-**Scans** are the foundation for barcode scanners at a hub. `scanType` is `Arrival` (→ `ArrivedAtWarehouse`), `Dispatch`
-(→ `InTransit`, recorded as leaving that warehouse) or `OutForDelivery` (handed to a rider). A scan is a normal status
-change, so the same workflow, role and location rules apply and scanning the same arrival twice is refused. In a batch each
-parcel succeeds or fails on its own: the response lists every tracking number with its new status or its error, and a failed
-scan changes nothing. Tracking numbers are accepted in any case and with spaces or dashes; duplicates are scanned once.
+**Scans** were introduced here as a foundation and completed in Phase 5: a scan is a normal status change (same workflow,
+role and location rules), and it also records a warehouse movement and a scan-log row. Scanning the same thing twice is now
+answered `200` with `"outcome": "Duplicate"` and changes nothing, staff must be assigned to the warehouse's branch, and
+barcodes and QR links are both accepted. See [network.md](network.md) for the whole story.
+
+**Staff at a warehouse**: a change that names a warehouse (`ArrivedAtWarehouse`, a dispatch, `OutForDelivery` from a hub)
+also records the movement, and only `SuperAdmin` or staff assigned to that warehouse's branch may make it.
 
 ## Customer tracking
 
@@ -157,8 +160,9 @@ How the code is protected:
   constant-time.
 
 **SMS delivery**: the code is written to the notification outbox (`NotificationOutbox`, template `tracking-otp`, channel
-SMS) in the same transaction as the code itself. An SMS provider and the worker that sends outbox messages arrive with the
-notifications phase; until then no real SMS leaves the system. For local development set `Tracking:LogCodes` to `true`
+SMS) in the same transaction as the code itself. The background worker sends it through the configured SMS provider (see
+[notifications.md](notifications.md)); with the default **mock** provider no real SMS leaves the system and the text can be read in
+the test inbox. Once sent (or given up on) the code is erased from the outbox row. For local development set `Tracking:LogCodes` to `true`
 (already the case in `appsettings.Development.json`): the API log then shows a `DEVELOPMENT ONLY` line with the code. **Never
 enable it in production**, because anyone who can read the logs could view private tracking details.
 
@@ -168,8 +172,7 @@ enable it in production**, because anyone who can read the logs could view priva
   receiver with a code).
 - Parcel details (staff): an "Update status" panel offering only the statuses the caller may set, asking for remarks, branch
   or warehouse where required, and a timeline showing from → to, place, time, remarks and who.
-- `/scan` (SuperAdmin, BranchManager, WarehouseStaff): choose the warehouse and scan type, scan or type tracking numbers
-  (one per line, duplicates dropped), submit, and see a result for every parcel.
+- `/scan` (SuperAdmin, BranchManager, WarehouseStaff): the warehouse scan screen, rebuilt in Phase 5 (see [network.md](network.md)).
 
 ## Tests
 

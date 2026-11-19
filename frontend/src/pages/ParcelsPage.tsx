@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/useAuth';
+import FindByScan from '../components/FindByScan';
 import { Alert, PrimaryButton, SecondaryButton, SelectField, TextField } from '../components/form';
 import { formatNepalDateTime, formatNpr } from '../lib/format';
 import { CHANNEL_LABELS, PAYMENT_LABELS, SERVICE_LABELS, STATUS_LABELS, paymentLabel, serviceLabel, statusLabel, statusTone } from '../lib/labels';
@@ -54,6 +55,8 @@ export default function ParcelsPage() {
           </Link>
         )}
       </div>
+
+      {auth.isStaff && <FindByScan className="mt-6 max-w-xl" />}
 
       <form onSubmit={handleSubmit} noValidate role="search" aria-label="Filter parcels" className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

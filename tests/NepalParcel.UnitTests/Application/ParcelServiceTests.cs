@@ -4,7 +4,9 @@ using NepalParcel.Application.Auth;
 using NepalParcel.Application.Branches;
 using NepalParcel.Application.Common.Exceptions;
 using NepalParcel.Application.Common.Interfaces;
+using NepalParcel.Application.Notifications;
 using NepalParcel.Application.Parcels;
+using NepalParcel.Application.Payments;
 using NepalParcel.Application.Tracking;
 using NepalParcel.Contracts.Parcels;
 using NepalParcel.Domain.Auditing;
@@ -23,11 +25,14 @@ public sealed class ParcelServiceTests
 {
     private readonly IParcelRepository _parcels = Substitute.For<IParcelRepository>();
     private readonly IPaymentRepository _payments = Substitute.For<IPaymentRepository>();
+    private readonly IPaymentTransactionRepository _transactions = Substitute.For<IPaymentTransactionRepository>();
     private readonly IBranchRepository _branches = Substitute.For<IBranchRepository>();
     private readonly IWarehouseRepository _warehouses = Substitute.For<IWarehouseRepository>();
     private readonly ICustomerRepository _customers = Substitute.For<ICustomerRepository>();
     private readonly IAuditLogRepository _audit = Substitute.For<IAuditLogRepository>();
     private readonly IPricingRepository _pricing = Substitute.For<IPricingRepository>();
+    private readonly INotificationPlanner _notifications = Substitute.For<INotificationPlanner>();
+    private readonly INotificationConsentRepository _consents = Substitute.For<INotificationConsentRepository>();
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
     private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
     private readonly IClientInfo _client = Substitute.For<IClientInfo>();
@@ -60,7 +65,8 @@ public sealed class ParcelServiceTests
 
         var options = Options.Create(new BookingOptions { Receipt = { CompanyName = "Afno Parcel Test", CompanyPhone = "01-4000000" } });
         _sut = new ParcelService(
-            _parcels, _payments, _branches, _warehouses, _customers, _audit,
+            _parcels, _payments, new PaymentLedger(_transactions), _branches, _warehouses, _customers, _audit,
+            _notifications, _consents,
             new PriceEngine(_pricing, options),
             _unitOfWork, _currentUser, _client, _clock, options,
             new BookParcelRequestValidator(options),

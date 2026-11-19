@@ -117,8 +117,11 @@ public sealed class ModuleEntityTests
 
         Assert.Equal(-50m, collection.Variance);
         collection.AttachToSettlement(Guid.NewGuid());
-        Assert.Equal(CodCollectionStatus.Settled, collection.Status);
+        Assert.Equal(CodCollectionStatus.Collected, collection.Status); // settled only once the cash has been counted
+        Assert.True(collection.IsInSettlement);
         Assert.Throws<DomainException>(() => collection.AttachToSettlement(Guid.NewGuid()));
+        collection.MarkSettled();
+        Assert.Equal(CodCollectionStatus.Settled, collection.Status);
     }
 
     [Fact]
@@ -127,10 +130,11 @@ public sealed class ModuleEntityTests
         var settlement = CodSettlement.Create("set-0001", Guid.NewGuid(), 12500m, 4);
 
         Assert.Equal("SET-0001", settlement.ReferenceNumber);
-        Assert.Throws<DomainException>(() => settlement.Verify(Now, Guid.NewGuid()));
+        Assert.Throws<DomainException>(() => settlement.Verify(Now, Guid.NewGuid(), 12500m));
         settlement.Submit(Now);
-        settlement.Verify(Now.AddHours(1), Guid.NewGuid());
+        settlement.Verify(Now.AddHours(1), Guid.NewGuid(), 12500m);
         Assert.Equal(SettlementStatus.Verified, settlement.Status);
+        Assert.Equal(0m, settlement.Variance);
     }
 
     [Fact]

@@ -65,6 +65,17 @@ public sealed class WebhookEvent : Entity
         Error = null;
     }
 
+    /// <summary>
+    /// A processing attempt that could not finish yet (for example the report arrived before we saved the message id). The
+    /// event stays <c>Received</c> so it is tried again.
+    /// </summary>
+    public void NoteAttempt(string reason)
+    {
+        AttemptCount++;
+        Status = WebhookStatus.Received;
+        Error = Guard.NotBlank(reason, "Reason", 1000);
+    }
+
     public void MarkFailed(string error)
     {
         AttemptCount++;

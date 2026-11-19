@@ -37,6 +37,7 @@ public sealed class RateLimitSettings
     public const string BookingPolicy = "booking";
     public const string TrackingPolicy = "tracking";
     public const string TrackingOtpPolicy = "tracking-otp";
+    public const string WebhookPolicy = "webhook";
 
     /// <summary>Requests per client IP per minute to register/login/refresh/logout.</summary>
     [Range(1, 100000)]
@@ -53,4 +54,8 @@ public sealed class RateLimitSettings
     /// <summary>One-time code requests and verifications per client IP per minute.</summary>
     [Range(1, 100000)]
     public int TrackingOtpPermitPerMinute { get; set; } = 10;
+
+    /// <summary>Provider webhook calls per client IP per minute. Higher than the others: a provider reports every message.</summary>
+    [Range(1, 100000)]
+    public int WebhookPermitPerMinute { get; set; } = 600;
 }

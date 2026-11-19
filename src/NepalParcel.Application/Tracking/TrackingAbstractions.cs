@@ -30,6 +30,13 @@ public sealed class TrackingOptions
     public int AccessTokenMinutes { get; set; } = 15;
 
     /// <summary>
+    /// The address of the customer website. QR codes on labels link to <c>{PublicBaseUrl}/track/{trackingNumber}</c>.
+    /// </summary>
+    [Required]
+    [StringLength(200)]
+    public string PublicBaseUrl { get; set; } = "http://localhost:5173";
+
+    /// <summary>
     /// Writes each one-time code to the log so developers can sign in without an SMS provider.
     /// <b>Never enable this outside local development</b>: anyone who can read the logs could track parcels.
     /// </summary>
@@ -61,11 +68,6 @@ public interface ITrackingOtpRepository
     Task<int> CountSinceAsync(Guid parcelId, DateTimeOffset sinceUtc, CancellationToken cancellationToken = default);
 }
 
-public interface INotificationOutboxRepository
-{
-    void Add(NotificationOutboxMessage message);
-}
-
 public interface IWarehouseRepository
 {
     Task<Warehouse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
@@ -74,7 +76,10 @@ public interface IWarehouseRepository
 
     Task<bool> CodeExistsAsync(string code, CancellationToken cancellationToken = default);
 
-    Task<(IReadOnlyList<Warehouse> Items, int TotalCount)> GetPageAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<Warehouse> Items, int TotalCount)> SearchAsync(WarehouseFilter filter, int page, int pageSize, CancellationToken cancellationToken = default);
+
+    /// <summary>How many warehouses each branch operates (optionally only the active ones).</summary>
+    Task<IReadOnlyDictionary<Guid, int>> CountByBranchAsync(IReadOnlyCollection<Guid> branchIds, bool activeOnly, CancellationToken cancellationToken = default);
 
     void Add(Warehouse warehouse);
 }
@@ -84,10 +89,6 @@ public interface IParcelStatusService
     Task<ParcelStatusUpdateResponse> UpdateAsync(Guid parcelId, UpdateParcelStatusRequest request, CancellationToken cancellationToken = default);
 
     Task<ParcelStatusUpdateResponse> UpdateByTrackingNumberAsync(string trackingNumber, UpdateParcelStatusRequest request, CancellationToken cancellationToken = default);
-
-    Task<ParcelStatusUpdateResponse> ScanAsync(ScanRequest request, CancellationToken cancellationToken = default);
-
-    Task<BatchScanResponse> ScanBatchAsync(BatchScanRequest request, CancellationToken cancellationToken = default);
 }
 
 public interface ITrackingService
@@ -102,9 +103,19 @@ public interface ITrackingService
     Task<DetailedTrackingResponse> GetDetailsAsync(string trackingNumber, string? accessToken, CancellationToken cancellationToken = default);
 }
 
+public sealed record WarehouseFilter(string? Search = null, Guid? BranchId = null, bool IncludeInactive = false);
+
 public interface IWarehouseService
 {
-    Task<PagedResponse<WarehouseResponse>> GetPageAsync(PageQuery query, CancellationToken cancellationToken = default);
+    Task<PagedResponse<WarehouseResponse>> GetPageAsync(WarehouseQuery query, CancellationToken cancellationToken = default);
+
+    Task<WarehouseResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<WarehouseResponse> CreateAsync(CreateWarehouseRequest request, CancellationToken cancellationToken = default);
+
+    Task<WarehouseResponse> UpdateAsync(Guid id, UpdateWarehouseRequest request, CancellationToken cancellationToken = default);
+
+    Task<WarehouseResponse> ActivateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<WarehouseResponse> DeactivateAsync(Guid id, CancellationToken cancellationToken = default);
 }

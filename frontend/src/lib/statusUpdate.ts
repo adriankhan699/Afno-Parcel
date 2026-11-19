@@ -1,4 +1,13 @@
 import type { UpdateParcelStatusRequest } from '../types/api';
+import { canUpdateStatus } from './auth';
+
+/**
+ * The statuses to offer on the status screen: what the server says the parcel may move to, but only to roles that use the
+ * status API at all. Delivery agents are offered none: they deliver through the agent app, with proof and cash handling.
+ */
+export function statusesOfferedTo(roles: readonly string[] | null | undefined, allowed: readonly string[]): string[] {
+  return canUpdateStatus(roles) ? [...allowed] : [];
+}
 
 // These rules mirror NepalParcel.Domain.Parcels.ParcelStatusRules so the form can guide staff. The server enforces them.
 
@@ -27,6 +36,8 @@ export interface StatusForm {
   locationKind: LocationKind;
   branchId: string;
   warehouseId: string;
+  /** Only for InTransit: the warehouse the parcel is travelling to. Empty means not specified. */
+  toWarehouseId: string;
 }
 
 export const emptyStatusForm = (status = ''): StatusForm => ({
@@ -35,7 +46,11 @@ export const emptyStatusForm = (status = ''): StatusForm => ({
   locationKind: '',
   branchId: '',
   warehouseId: '',
+  toWarehouseId: '',
 });
+
+/** A parcel that goes in transit can say which warehouse it is heading to, so that warehouse sees it as inbound. */
+export const usesDestinationWarehouse = (status: string): boolean => status === 'InTransit';
 
 /** Which kind of place the form is recording: fixed by the status, or the user's choice. '' means none. */
 export function resolveLocationKind(status: string, chosen: LocationKind): LocationKind {
@@ -73,12 +88,21 @@ export function validateStatusForm(form: StatusForm): Record<string, string> {
   if (kind === 'warehouse' && !form.warehouseId) {
     errors.warehouseId = 'Choose the warehouse.';
   }
+  if (
+    usesDestinationWarehouse(form.status) &&
+    form.toWarehouseId &&
+    kind === 'warehouse' &&
+    form.toWarehouseId === form.warehouseId
+  ) {
+    errors.toWarehouseId = 'The destination must be a different warehouse from where it is recorded.';
+  }
   return errors;
 }
 
 /**
  * The request body. It carries at most one of branchId and warehouseId (the server rejects both), and only the one that
- * matches the place being recorded, even if the other select still holds an old value.
+ * matches the place being recorded, even if the other select still holds an old value. The destination warehouse
+ * (toWarehouseId) is only sent when going in transit.
  */
 export function buildStatusRequest(form: StatusForm): UpdateParcelStatusRequest {
   const request: UpdateParcelStatusRequest = { status: form.status };
@@ -88,5 +112,6 @@ export function buildStatusRequest(form: StatusForm): UpdateParcelStatusRequest 
   const kind = resolveLocationKind(form.status, form.locationKind);
   if (kind === 'branch' && form.branchId) request.branchId = form.branchId;
   if (kind === 'warehouse' && form.warehouseId) request.warehouseId = form.warehouseId;
+  if (usesDestinationWarehouse(form.status) && form.toWarehouseId) request.toWarehouseId = form.toWarehouseId;
   return request;
 }

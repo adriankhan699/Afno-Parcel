@@ -256,6 +256,45 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.ToTable("Branches", "parcel");
                 });
 
+            modelBuilder.Entity("NepalParcel.Domain.Branches.StaffAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("AssignedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("AssignedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("EndedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("EndedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("[EndedAtUtc] IS NULL");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("BranchId", "EndedAtUtc");
+
+                    b.ToTable("StaffAssignments", "parcel");
+                });
+
             modelBuilder.Entity("NepalParcel.Domain.Customers.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -498,6 +537,8 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ParcelId");
 
+                    b.HasIndex("DeliveryAgentId", "AssignedAtUtc");
+
                     b.HasIndex("DeliveryAgentId", "Status");
 
                     b.HasIndex("ParcelId", "Type")
@@ -507,6 +548,52 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.ToTable("DeliveryAssignments", "parcel", t =>
                         {
                             t.HasCheckConstraint("CK_DeliveryAssignments_Attempt", "[AttemptNumber] >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Delivery.DeliveryOtp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AssignmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTimeOffset?>("ConsumedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ParcelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParcelId");
+
+                    b.HasIndex("AssignmentId", "CreatedAtUtc");
+
+                    b.ToTable("DeliveryOtps", "parcel", t =>
+                        {
+                            t.HasCheckConstraint("CK_DeliveryOtps_Attempts", "[FailedAttempts] >= 0");
                         });
                 });
 
@@ -665,10 +752,60 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.ToTable("WebhookEvents", "parcel");
                 });
 
+            modelBuilder.Entity("NepalParcel.Domain.Notifications.MockProviderMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ParametersJson")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TemplateName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("ProviderMessageId")
+                        .IsUnique();
+
+                    b.ToTable("MockProviderMessages", "parcel");
+                });
+
             modelBuilder.Entity("NepalParcel.Domain.Notifications.NotificationLog", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("AttemptNumber")
+                        .HasColumnType("int");
 
                     b.Property<string>("Channel")
                         .IsRequired()
@@ -681,6 +818,9 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.Property<string>("Error")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTimeOffset?>("OccurredAtUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<Guid?>("OutboxMessageId")
                         .HasColumnType("uniqueidentifier");
@@ -713,6 +853,46 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.ToTable("NotificationLogs", "parcel");
                 });
 
+            modelBuilder.Entity("NepalParcel.Domain.Notifications.NotificationOptOut", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid?>("RecordedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("RemovedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("PhoneNumber", "Channel")
+                        .IsUnique()
+                        .HasFilter("[RemovedAtUtc] IS NULL");
+
+                    b.ToTable("NotificationOptOuts", "parcel");
+                });
+
             modelBuilder.Entity("NepalParcel.Domain.Notifications.NotificationOutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -720,6 +900,11 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("AttemptCount")
                         .HasColumnType("int");
+
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("Channel")
                         .IsRequired()
@@ -731,6 +916,30 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("CustomerId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset?>("DeliveredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DeliveryError")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("DeliveryStatus")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset?>("FailedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("LastError")
                         .HasMaxLength(1000)
@@ -756,10 +965,25 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("ProcessedAtUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("Provider")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset?>("ReadAtUtc")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("Recipient")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("RenderedBody")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -767,10 +991,20 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<DateTimeOffset?>("SentAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("SkipReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset?>("SubmittedAtUtc")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("TemplateKey")
                         .IsRequired()
@@ -779,13 +1013,75 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAtUtc");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("ParcelId");
 
+                    b.HasIndex("Provider", "ProviderMessageId")
+                        .IsUnique()
+                        .HasFilter("[ProviderMessageId] IS NOT NULL");
+
                     b.HasIndex("Status", "NextAttemptAtUtc");
 
+                    b.HasIndex("DedupeKey", "Audience", "Channel")
+                        .IsUnique()
+                        .HasFilter("[DedupeKey] IS NOT NULL");
+
                     b.ToTable("NotificationOutbox", "parcel");
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Notifications.NotificationTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("ProviderTemplateName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key", "Channel", "Language")
+                        .IsUnique();
+
+                    b.ToTable("NotificationTemplates", "parcel");
                 });
 
             modelBuilder.Entity("NepalParcel.Domain.Parcels.Parcel", b =>
@@ -863,6 +1159,9 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .HasPrecision(8, 2)
                         .HasColumnType("decimal(8,2)");
 
+                    b.Property<Guid?>("NextWarehouseId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -923,6 +1222,9 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<DateTimeOffset>("StatusChangedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("TrackingNumber")
                         .IsRequired()
                         .HasMaxLength(14)
@@ -969,6 +1271,8 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DestinationBranchId");
 
+                    b.HasIndex("NextWarehouseId");
+
                     b.HasIndex("OriginBranchId");
 
                     b.HasIndex("PricingRuleId");
@@ -983,6 +1287,8 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("CurrentStatusId", "BookedAtUtc");
+
+                    b.HasIndex("CurrentStatusId", "StatusChangedAtUtc");
 
                     b.ToTable("Parcels", "parcel", t =>
                         {
@@ -1301,6 +1607,10 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.Property<int>("CollectionCount")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("CountedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -1453,9 +1763,23 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nchar(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset?>("ExpiresAtUtc")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("FailureReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("MerchantReference")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid>("PaymentId")
                         .HasColumnType("uniqueidentifier");
@@ -1469,6 +1793,9 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<Guid?>("RecordedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -1481,16 +1808,73 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MerchantReference")
+                        .IsUnique();
+
                     b.HasIndex("PaymentId");
 
                     b.HasIndex("Provider", "ProviderReference")
                         .IsUnique()
                         .HasFilter("[ProviderReference] IS NOT NULL");
 
+                    b.HasIndex("Status", "CreatedAtUtc");
+
                     b.ToTable("PaymentTransactions", "parcel", t =>
                         {
                             t.HasCheckConstraint("CK_PaymentTransactions_Amount", "[Amount] > 0");
                         });
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Payments.TestGatewaySession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nchar(3)")
+                        .IsFixedLength();
+
+                    b.Property<string>("MerchantReference")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MerchantReference")
+                        .IsUnique();
+
+                    b.HasIndex("ProviderTransactionId")
+                        .IsUnique()
+                        .HasFilter("[ProviderTransactionId] IS NOT NULL");
+
+                    b.ToTable("TestGatewaySessions", "parcel");
                 });
 
             modelBuilder.Entity("NepalParcel.Domain.Pricing.PricingRule", b =>
@@ -1690,6 +2074,106 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_TrackingOtps_Attempts", "[FailedAttempts] >= 0");
                         });
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Warehouses.ParcelMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsUnexpectedArrival")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("ParcelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ScanType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("StaffName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<Guid>("StaffUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ToWarehouseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffUserId");
+
+                    b.HasIndex("ToWarehouseId");
+
+                    b.HasIndex("ParcelId", "OccurredAtUtc");
+
+                    b.HasIndex("WarehouseId", "OccurredAtUtc");
+
+                    b.ToTable("ParcelMovements", "parcel");
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Warehouses.ParcelScan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MovementId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid>("ParcelId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ScanType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTimeOffset>("ScannedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("StaffName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<Guid>("StaffUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MovementId");
+
+                    b.HasIndex("ParcelId", "ScannedAtUtc");
+
+                    b.HasIndex("StaffUserId", "ScannedAtUtc");
+
+                    b.HasIndex("WarehouseId", "ScannedAtUtc");
+
+                    b.ToTable("ParcelScans", "parcel");
                 });
 
             modelBuilder.Entity("NepalParcel.Domain.Warehouses.Warehouse", b =>
@@ -2022,6 +2506,26 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("NepalParcel.Domain.Branches.StaffAssignment", b =>
+                {
+                    b.HasOne("NepalParcel.Domain.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Domain.Warehouses.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("NepalParcel.Domain.Customers.Customer", b =>
                 {
                     b.HasOne("NepalParcel.Infrastructure.Identity.ApplicationUser", null)
@@ -2122,6 +2626,21 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("NepalParcel.Domain.Delivery.DeliveryOtp", b =>
+                {
+                    b.HasOne("NepalParcel.Domain.Delivery.DeliveryAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Domain.Parcels.Parcel", null)
+                        .WithMany()
+                        .HasForeignKey("ParcelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("NepalParcel.Domain.Delivery.DeliveryProof", b =>
                 {
                     b.HasOne("NepalParcel.Domain.Delivery.DeliveryAssignment", null)
@@ -2192,6 +2711,11 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.HasOne("NepalParcel.Domain.Branches.Branch", null)
                         .WithMany()
                         .HasForeignKey("DestinationBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NepalParcel.Domain.Warehouses.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("NextWarehouseId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("NepalParcel.Domain.Branches.Branch", null)
@@ -2442,6 +2966,59 @@ namespace NepalParcel.Infrastructure.Persistence.Migrations
                     b.HasOne("NepalParcel.Domain.Parcels.Parcel", null)
                         .WithMany()
                         .HasForeignKey("ParcelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Warehouses.ParcelMovement", b =>
+                {
+                    b.HasOne("NepalParcel.Domain.Parcels.Parcel", null)
+                        .WithMany()
+                        .HasForeignKey("ParcelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Domain.Warehouses.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("ToWarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("NepalParcel.Domain.Warehouses.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NepalParcel.Domain.Warehouses.ParcelScan", b =>
+                {
+                    b.HasOne("NepalParcel.Domain.Warehouses.ParcelMovement", null)
+                        .WithMany()
+                        .HasForeignKey("MovementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Domain.Parcels.Parcel", null)
+                        .WithMany()
+                        .HasForeignKey("ParcelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("StaffUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("NepalParcel.Domain.Warehouses.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -9,6 +9,7 @@ public enum ConsentType
     SmsNotifications = 3,
     EmailNotifications = 4,
     Marketing = 5,
+    WhatsAppNotifications = 6,
 }
 
 public enum ConsentSource

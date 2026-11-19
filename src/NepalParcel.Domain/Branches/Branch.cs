@@ -84,6 +84,21 @@ public sealed class Branch : AuditableEntity
             Guard.Optional(email, "Email", EmailMaxLength)?.ToLowerInvariant());
     }
 
+    /// <summary>Changes the editable details. The code and the type are fixed once a branch exists.</summary>
+    public void Update(string name, NepalAddress address, string phoneNumber, string? email)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        if (!NepalPhoneNumber.TryNormalize(phoneNumber, out var phone))
+        {
+            throw new DomainException("Phone number is not a valid Nepali phone number.");
+        }
+
+        Name = Guard.NotBlank(name, "Branch name", NameMaxLength);
+        Address = address;
+        PhoneNumber = phone;
+        Email = Guard.Optional(email, "Email", EmailMaxLength)?.ToLowerInvariant();
+    }
+
     public void Deactivate() => IsActive = false;
 
     public void Activate() => IsActive = true;

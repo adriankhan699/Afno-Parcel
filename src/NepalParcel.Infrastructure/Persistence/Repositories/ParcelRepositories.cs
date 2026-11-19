@@ -19,6 +19,13 @@ internal sealed class ParcelRepository(NepalParcelDbContext dbContext) : IParcel
     public Task<Parcel?> GetByTrackingNumberAsync(string trackingNumber, CancellationToken cancellationToken = default) =>
         dbContext.Parcels.Include(p => p.StatusHistory).FirstOrDefaultAsync(p => p.TrackingNumber == trackingNumber, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, Parcel>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default) =>
+        await dbContext.Parcels
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, cancellationToken)
+            .ConfigureAwait(false);
+
     public Task<bool> TrackingNumberExistsAsync(string trackingNumber, CancellationToken cancellationToken = default) =>
         dbContext.Parcels.AnyAsync(p => p.TrackingNumber == trackingNumber, cancellationToken);
 
@@ -150,6 +157,17 @@ internal sealed class ParcelRepository(NepalParcelDbContext dbContext) : IParcel
 internal sealed class PaymentRepository(NepalParcelDbContext dbContext) : IPaymentRepository
 {
     public void Add(Payment payment) => dbContext.Payments.Add(payment);
+
+    public Task<Payment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        dbContext.Payments.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<Payment>> GetByParcelIdAsync(Guid parcelId, CancellationToken cancellationToken = default) =>
+        await dbContext.Payments
+            .AsNoTracking()
+            .Where(p => p.ParcelId == parcelId)
+            .OrderByDescending(p => p.CreatedAtUtc)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
 
     public Task<Payment?> GetLatestByParcelIdAsync(Guid parcelId, CancellationToken cancellationToken = default) =>
         dbContext.Payments

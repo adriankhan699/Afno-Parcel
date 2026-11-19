@@ -6,11 +6,38 @@ import {
   locationRequirement,
   remarksRequired,
   resolveLocationKind,
+  statusesOfferedTo,
+  usesDestinationWarehouse,
   validateStatusForm,
   type StatusForm,
 } from './statusUpdate';
 
 const form = (patch: Partial<StatusForm>): StatusForm => ({ ...emptyStatusForm('PickedUp'), ...patch });
+
+describe('statusesOfferedTo', () => {
+  const allowed = ['PickedUp', 'OutForDelivery', 'Delivered', 'DeliveryFailed'];
+
+  it('offers delivery agents no statuses at all: they deliver through the agent app', () => {
+    expect(statusesOfferedTo(['DeliveryAgent'], allowed)).toEqual([]);
+    expect(statusesOfferedTo(['DeliveryAgent'], ['PickedUp'])).toEqual([]);
+  });
+
+  it.each(['SuperAdmin', 'BranchManager', 'BookingStaff', 'WarehouseStaff'])('%s is offered what the server allows', (role) => {
+    expect(statusesOfferedTo([role], allowed)).toEqual(allowed);
+  });
+
+  it('offers nothing to customers, accountants and signed-out visitors', () => {
+    expect(statusesOfferedTo(['Customer'], allowed)).toEqual([]);
+    expect(statusesOfferedTo(['Accountant'], allowed)).toEqual([]);
+    expect(statusesOfferedTo(undefined, allowed)).toEqual([]);
+    expect(statusesOfferedTo(null, allowed)).toEqual([]);
+  });
+
+  it('returns a copy, so callers cannot change the parcel data', () => {
+    const result = statusesOfferedTo(['SuperAdmin'], allowed);
+    expect(result).not.toBe(allowed);
+  });
+});
 
 describe('status rules (mirror of the server rules)', () => {
   it.each([
@@ -93,6 +120,33 @@ describe('validateStatusForm', () => {
   it('limits remarks to 500 characters', () => {
     expect(validateStatusForm(form({ status: 'InTransit', remarks: 'x'.repeat(REMARKS_MAX_LENGTH) }))).toEqual({});
     expect(validateStatusForm(form({ status: 'InTransit', remarks: 'x'.repeat(REMARKS_MAX_LENGTH + 1) }))).toHaveProperty('remarks');
+  });
+});
+
+describe('destination warehouse for InTransit', () => {
+  it('is offered only when going in transit', () => {
+    expect(usesDestinationWarehouse('InTransit')).toBe(true);
+    for (const status of ['PickedUp', 'Shipped', 'ArrivedAtWarehouse', 'OutForDelivery', 'Delivered', 'DeliveryFailed', 'Returned']) {
+      expect(usesDestinationWarehouse(status)).toBe(false);
+    }
+  });
+
+  it('is sent for InTransit and left out when empty or for other statuses', () => {
+    expect(buildStatusRequest(form({ status: 'InTransit', toWarehouseId: 'w2' }))).toEqual({ status: 'InTransit', toWarehouseId: 'w2' });
+    expect('toWarehouseId' in buildStatusRequest(form({ status: 'InTransit', toWarehouseId: '' }))).toBe(false);
+    expect('toWarehouseId' in buildStatusRequest(form({ status: 'Shipped', branchId: 'b1', toWarehouseId: 'w2' }))).toBe(false);
+  });
+
+  it('must differ from the warehouse the movement is recorded at', () => {
+    const base = { status: 'InTransit', locationKind: 'warehouse' as const, warehouseId: 'w1' };
+
+    expect(validateStatusForm(form({ ...base, toWarehouseId: 'w1' }))).toHaveProperty('toWarehouseId');
+    expect(validateStatusForm(form({ ...base, toWarehouseId: 'w2' }))).toEqual({});
+    expect(validateStatusForm(form({ ...base, toWarehouseId: '' }))).toEqual({});
+  });
+
+  it('is not compared with a warehouse that is not being recorded', () => {
+    expect(validateStatusForm(form({ status: 'InTransit', locationKind: 'branch', branchId: 'b1', warehouseId: 'w1', toWarehouseId: 'w1' }))).toEqual({});
   });
 });
 

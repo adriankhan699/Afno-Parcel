@@ -6,7 +6,7 @@ namespace NepalParcel.Application.Branches;
 
 internal static class BranchMappings
 {
-    public static BranchResponse ToResponse(this Branch branch) =>
+    public static BranchResponse ToResponse(this Branch branch, int warehouseCount = 0, int staffCount = 0) =>
         new(
             branch.Id,
             branch.Code,
@@ -17,5 +17,7 @@ internal static class BranchMappings
             branch.Email,
             branch.IsActive,
             branch.CreatedAtUtc,
-            branch.UpdatedAtUtc);
+            branch.UpdatedAtUtc,
+            warehouseCount,
+            staffCount);
 }

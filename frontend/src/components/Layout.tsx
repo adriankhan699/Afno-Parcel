@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 import { env } from '../config/env';
-import { canBook, canScan } from '../lib/auth';
+import { AGENT_HOME, canBook, canManageOwnNotifications, canScan, canViewAdmin, isDeliveryAgent, isFinanceOnly } from '../lib/auth';
 import { logout } from '../lib/session';
 import ApiStatusBadge from './ApiStatusBadge';
 
@@ -22,14 +22,22 @@ export default function Layout() {
   const roles = auth.user?.roles;
 
   const navItems: NavItem[] = [{ to: '/', label: 'Home', end: true }];
-  if (!auth.isAuthenticated || canBook(roles)) {
+  const agent = auth.isAuthenticated && isDeliveryAgent(roles);
+  if (agent) {
+    // A delivery agent works in the agent app: no booking, parcel list, scanner or admin links.
+    navItems.push({ to: AGENT_HOME, label: 'My deliveries' });
+  }
+  if (!agent && (!auth.isAuthenticated || canBook(roles))) {
     navItems.push({ to: '/book', label: 'Book a parcel' });
   }
-  if (auth.isAuthenticated) {
+  if (auth.isAuthenticated && !agent) {
     navItems.push({ to: '/parcels', label: auth.isStaff ? 'Parcels' : 'My parcels' });
   }
   if (auth.isAuthenticated && canScan(roles)) {
     navItems.push({ to: '/scan', label: 'Scan' });
+  }
+  if (auth.isAuthenticated && canViewAdmin(roles)) {
+    navItems.push({ to: '/admin', label: isFinanceOnly(roles) ? 'Finance' : 'Admin' });
   }
   navItems.push({ to: '/track', label: 'Track parcel' }, { to: '/branches', label: 'Branches' });
 
@@ -40,7 +48,7 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* Everything except the page content is hidden when printing (receipts). */}
+      {/* Everything except the page content is hidden when printing (receipts and labels). */}
       <header className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <NavLink to="/" className="flex items-center gap-2 font-semibold text-brand-700">
@@ -59,6 +67,11 @@ export default function Layout() {
                 <span className="px-2 text-sm text-slate-600" title={auth.user.email}>
                   {auth.user.fullName}
                 </span>
+                {canManageOwnNotifications(roles) && (
+                  <NavLink to="/account/notifications" className={navClass}>
+                    Parcel updates
+                  </NavLink>
+                )}
                 <button
                   type="button"
                   onClick={() => void handleSignOut()}

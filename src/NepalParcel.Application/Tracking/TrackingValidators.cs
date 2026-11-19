@@ -9,19 +9,6 @@ using NepalParcel.Domain.Warehouses;
 
 namespace NepalParcel.Application.Tracking;
 
-/// <summary>The kinds of warehouse scan and the parcel status each one produces.</summary>
-public enum ScanType
-{
-    /// <summary>The parcel arrives at the warehouse.</summary>
-    Arrival = 1,
-
-    /// <summary>The parcel leaves the warehouse for the next hub.</summary>
-    Dispatch = 2,
-
-    /// <summary>The parcel is handed to a rider for delivery.</summary>
-    OutForDelivery = 3,
-}
-
 internal static class ScanTypeExtensions
 {
     public static ParcelStatusCode ToStatus(this ScanType scanType) => scanType switch
@@ -48,18 +35,21 @@ public sealed class UpdateParcelStatusRequestValidator : AbstractValidator<Updat
         RuleFor(r => r.Remarks).MaximumLength(ParcelStatusRules.RemarksMaxLength);
         RuleFor(r => r.BranchId).NotEqual(Guid.Empty).When(r => r.BranchId.HasValue);
         RuleFor(r => r.WarehouseId).NotEqual(Guid.Empty).When(r => r.WarehouseId.HasValue);
+        RuleFor(r => r.ToWarehouseId).NotEqual(Guid.Empty).When(r => r.ToWarehouseId.HasValue);
     }
 }
 
 public sealed class ScanRequestValidator : AbstractValidator<ScanRequest>
 {
-    public const int TrackingNumberInputMaxLength = 40;
+    /// <summary>Long enough for the tracking link a QR code carries.</summary>
+    public const int TrackingNumberInputMaxLength = 300;
 
     public ScanRequestValidator()
     {
         RuleFor(r => r.TrackingNumber).NotEmpty().MaximumLength(TrackingNumberInputMaxLength);
         RuleFor(r => r.ScanType).MustBeEnumName<ScanRequest, ScanType>("Scan type");
         RuleFor(r => r.WarehouseId).NotEmpty();
+        RuleFor(r => r.ToWarehouseId).NotEqual(Guid.Empty).When(r => r.ToWarehouseId.HasValue);
         RuleFor(r => r.Remarks).MaximumLength(ParcelStatusRules.RemarksMaxLength);
     }
 }

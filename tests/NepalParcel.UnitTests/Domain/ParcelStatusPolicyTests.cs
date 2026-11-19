@@ -108,7 +108,7 @@ public sealed class ParcelStatusPolicyTests
     [Theory]
     [InlineData(Roles.SuperAdmin, ParcelStatusCode.PickedUp, true)]
     [InlineData(Roles.BookingStaff, ParcelStatusCode.PickedUp, true)]
-    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.PickedUp, true)]
+    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.PickedUp, false)]
     [InlineData(Roles.WarehouseStaff, ParcelStatusCode.PickedUp, false)]
     [InlineData(Roles.BookingStaff, ParcelStatusCode.Shipped, true)]
     [InlineData(Roles.WarehouseStaff, ParcelStatusCode.Shipped, true)]
@@ -120,10 +120,10 @@ public sealed class ParcelStatusPolicyTests
     [InlineData(Roles.BookingStaff, ParcelStatusCode.ArrivedAtWarehouse, false)]
     [InlineData(Roles.DeliveryAgent, ParcelStatusCode.ArrivedAtWarehouse, false)]
     [InlineData(Roles.WarehouseStaff, ParcelStatusCode.OutForDelivery, true)]
-    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.OutForDelivery, true)]
+    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.OutForDelivery, false)]
     [InlineData(Roles.BookingStaff, ParcelStatusCode.OutForDelivery, false)]
-    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.Delivered, true)]
-    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.DeliveryFailed, true)]
+    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.Delivered, false)]
+    [InlineData(Roles.DeliveryAgent, ParcelStatusCode.DeliveryFailed, false)]
     [InlineData(Roles.WarehouseStaff, ParcelStatusCode.Delivered, false)]
     [InlineData(Roles.BookingStaff, ParcelStatusCode.Delivered, false)]
     [InlineData(Roles.WarehouseStaff, ParcelStatusCode.Returned, true)]
@@ -132,6 +132,17 @@ public sealed class ParcelStatusPolicyTests
     [InlineData(Roles.BranchManager, ParcelStatusCode.Returned, true)]
     public void Permissions_MatchTheJobEachRoleDoes(string role, ParcelStatusCode to, bool allowed) =>
         Assert.Equal(allowed, ParcelStatusPermissions.CanSet(role, to));
+
+    [Fact]
+    public void DeliveryAgents_CanSetNoStatusThroughTheStatusApi_BecauseTheyWorkOnlyOnParcelsAssignedToThemThroughTheAgentApi()
+    {
+        foreach (var status in Enum.GetValues<ParcelStatusCode>())
+        {
+            Assert.False(ParcelStatusPermissions.CanSet(Roles.DeliveryAgent, status));
+        }
+
+        Assert.DoesNotContain(Roles.DeliveryAgent, Roles.StatusUpdatersCsv.Split(','));
+    }
 
     [Theory]
     [InlineData(Roles.Customer)]

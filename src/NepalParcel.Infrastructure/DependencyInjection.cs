@@ -6,12 +6,19 @@ using Microsoft.Extensions.Options;
 using NepalParcel.Application.Auth;
 using NepalParcel.Application.Branches;
 using NepalParcel.Application.Common.Interfaces;
+using NepalParcel.Application.Delivery;
+using NepalParcel.Application.Network;
+using NepalParcel.Application.Payments;
+using NepalParcel.Application.Notifications;
 using NepalParcel.Application.Parcels;
 using NepalParcel.Application.Tracking;
 using NepalParcel.Infrastructure.Identity;
+using NepalParcel.Infrastructure.Labels;
+using NepalParcel.Infrastructure.Notifications;
 using NepalParcel.Infrastructure.Persistence;
 using NepalParcel.Infrastructure.Persistence.Interceptors;
 using NepalParcel.Infrastructure.Persistence.Repositories;
+using NepalParcel.Infrastructure.Storage;
 
 namespace NepalParcel.Infrastructure;
 
@@ -35,6 +42,8 @@ public static class DependencyInjection
                 "Set it with 'dotnet user-secrets' or the ConnectionStrings__DefaultConnection environment variable.")
             .ValidateOnStart();
 
+        services.TryAddSingleton<IOutboxDispatchSignal, NoOpOutboxDispatchSignal>();
+        services.AddScoped<OutboxDispatchInterceptor>();
         services.AddScoped<AuditableEntityInterceptor>();
         services.AddSingleton<ParcelHistoryGuardInterceptor>();
 
@@ -54,7 +63,8 @@ public static class DependencyInjection
 
             options.AddInterceptors(
                 sp.GetRequiredService<AuditableEntityInterceptor>(),
-                sp.GetRequiredService<ParcelHistoryGuardInterceptor>());
+                sp.GetRequiredService<ParcelHistoryGuardInterceptor>(),
+                sp.GetRequiredService<OutboxDispatchInterceptor>());
 
             if (db.EnableSensitiveDataLogging)
             {
@@ -73,8 +83,32 @@ public static class DependencyInjection
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<IPricingRepository, PricingRepository>();
         services.AddScoped<IWarehouseRepository, WarehouseRepository>();
+        services.AddScoped<IStaffAssignmentRepository, StaffAssignmentRepository>();
+        services.AddScoped<IMovementRepository, MovementRepository>();
+        services.AddScoped<IInventoryRepository, InventoryRepository>();
+        services.AddSingleton<ILabelGenerator, ZXingLabelGenerator>();
+        services.AddScoped<IDeliveryAgentRepository, DeliveryAgentRepository>();
+        services.AddScoped<IDeliveryAssignmentRepository, DeliveryAssignmentRepository>();
+        services.AddScoped<IDeliveryProofRepository, DeliveryProofRepository>();
+        services.AddScoped<ICodCollectionRepository, CodCollectionRepository>();
+        services.AddScoped<IDeliveryOtpRepository, DeliveryOtpRepository>();
+        services.AddScoped<IPaymentTransactionRepository, PaymentTransactionRepository>();
+        services.AddScoped<IPaymentReportRepository, PaymentReportRepository>();
+        services.AddScoped<ICodSettlementRepository, CodSettlementRepository>();
+        services.AddScoped<ITestGatewaySessions, TestGatewaySessionRepository>();
+        services.AddSingleton<IProofStorage, LocalProofStorage>();
         services.AddScoped<ITrackingOtpRepository, TrackingOtpRepository>();
         services.AddScoped<INotificationOutboxRepository, NotificationOutboxRepository>();
+        services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
+        services.AddScoped<INotificationOptOutRepository, NotificationOptOutRepository>();
+        services.AddScoped<INotificationConsentRepository, NotificationConsentRepository>();
+        services.AddScoped<IWebhookEventRepository, WebhookEventRepository>();
+        services.AddScoped<IMockProviderMessageRepository, MockProviderMessageRepository>();
+
+        // The real WhatsApp provider is always available to choose (Notifications:WhatsApp:Provider = Meta); the mock is the default.
+        services.AddHttpClient<MetaWhatsAppCloudProvider>((sp, client) =>
+            client.Timeout = TimeSpan.FromSeconds(sp.GetRequiredService<IOptions<NotificationOptions>>().Value.WhatsApp.TimeoutSeconds));
+        services.AddTransient<IMessageProvider>(sp => sp.GetRequiredService<MetaWhatsAppCloudProvider>());
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();

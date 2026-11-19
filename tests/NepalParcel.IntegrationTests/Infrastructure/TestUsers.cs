@@ -39,7 +39,11 @@ public static class TestUsers
     }
 
     /// <summary>Creates a user in the role, signs in over HTTP and returns a client with the bearer token set.</summary>
-    public static async Task<HttpClient> CreateClientAsync(NepalParcelApiFactory factory, string role)
+    public static async Task<HttpClient> CreateClientAsync(NepalParcelApiFactory factory, string role) =>
+        (await CreateClientWithIdAsync(factory, role)).Client;
+
+    /// <summary>Like <see cref="CreateClientAsync"/>, and also returns the new user's id (for assigning them to a branch).</summary>
+    public static async Task<(HttpClient Client, Guid UserId)> CreateClientWithIdAsync(NepalParcelApiFactory factory, string role)
     {
         var (email, password) = await CreateAsync(factory, role);
         var client = factory.CreateClient();
@@ -49,6 +53,10 @@ public static class TestUsers
         var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.AccessToken);
-        return client;
+
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var userId = (await users.FindByEmailAsync(email))!.Id;
+        return (client, userId);
     }
 }

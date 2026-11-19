@@ -7,6 +7,7 @@ using NepalParcel.Application.Branches;
 using NepalParcel.Application.Common.Exceptions;
 using NepalParcel.Application.Common.Interfaces;
 using NepalParcel.Application.Parcels;
+using NepalParcel.Application.Notifications;
 using NepalParcel.Application.Tracking;
 using NepalParcel.Contracts.Tracking;
 using NepalParcel.Domain.Auditing;

@@ -48,6 +48,12 @@ public sealed class Payment : AuditableEntity
 
     public byte[] RowVersion { get; private set; } = [];
 
+    /// <summary>The number printed on the receipt, once the payment has been paid. Stable: it never changes after payment.</summary>
+    public string? ReceiptNumber =>
+        Status is PaymentStatus.Paid or PaymentStatus.Refunded or PaymentStatus.PartiallyRefunded && PaidAtUtc is { } paid
+            ? $"PR-{paid.UtcDateTime:yyyyMMdd}-{Id.ToString("N")[^8..].ToUpperInvariant()}"
+            : null;
+
     public static Payment Create(Guid parcelId, decimal amount, PaymentMethod method, Guid? payerCustomerId = null)
     {
         if (!Enum.IsDefined(method))

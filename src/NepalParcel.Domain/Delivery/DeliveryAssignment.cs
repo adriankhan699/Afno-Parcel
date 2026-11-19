@@ -108,9 +108,12 @@ public sealed class DeliveryAssignment : AuditableEntity
     public void Fail(DateTimeOffset atUtc, string reason)
     {
         Require(AssignmentStatus.InProgress);
+
+        // Check the reason before changing anything, so a refused call leaves the assignment as it was.
+        var text = Guard.NotBlank(reason, "Failure reason", 300);
         Status = AssignmentStatus.Failed;
         CompletedAtUtc = atUtc;
-        FailureReason = Guard.NotBlank(reason, "Failure reason", 300);
+        FailureReason = text;
     }
 
     public void Cancel(DateTimeOffset atUtc)

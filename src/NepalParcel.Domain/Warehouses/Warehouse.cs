@@ -66,6 +66,21 @@ public sealed class Warehouse : AuditableEntity
             capacityParcels);
     }
 
+    /// <summary>Changes the editable details. The code and the operating branch are fixed once a warehouse exists.</summary>
+    public void Update(string name, NepalAddress address, string phoneNumber, int? capacityParcels)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        if (capacityParcels is <= 0)
+        {
+            throw new DomainException("Warehouse capacity must be greater than zero.");
+        }
+
+        Name = Guard.NotBlank(name, "Warehouse name", NameMaxLength);
+        Address = address;
+        PhoneNumber = Guard.NormalizePhone(phoneNumber);
+        CapacityParcels = capacityParcels;
+    }
+
     public void Deactivate() => IsActive = false;
 
     public void Activate() => IsActive = true;

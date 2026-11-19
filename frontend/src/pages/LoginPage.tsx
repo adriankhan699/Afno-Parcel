@@ -4,7 +4,7 @@ import { useAuth } from '../auth/useAuth';
 import { Alert, PrimaryButton, TextField } from '../components/form';
 import { validateLogin } from '../lib/accountForms';
 import { ApiError } from '../lib/apiClient';
-import { safeReturnPath } from '../lib/auth';
+import { postLoginPath, safeReturnPath } from '../lib/auth';
 import type { FormErrors } from '../lib/booking';
 import { login } from '../lib/session';
 
@@ -20,7 +20,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   if (auth.isAuthenticated) {
-    return <Navigate to={returnTo} replace />;
+    return <Navigate to={postLoginPath(auth.user?.roles, returnTo)} replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -32,8 +32,8 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
-      await login({ email: form.email.trim(), password: form.password });
-      navigate(returnTo, { replace: true });
+      const user = await login({ email: form.email.trim(), password: form.password });
+      navigate(postLoginPath(user.roles, returnTo), { replace: true });
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Could not reach the server. Please try again shortly.');
       setBusy(false);

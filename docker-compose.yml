@@ -34,6 +34,9 @@ services:
       Bootstrap__SuperAdmin__Password: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-}
       Cors__AllowedOrigins__0: "http://localhost:${WEB_PORT:-5173}"
       Swagger__Enabled: "true"
+      Delivery__ProofStoragePath: /var/afno/proofs
+    volumes:
+      - proof-data:/var/afno/proofs
     ports:
       - "${API_PORT:-5080}:8080"
     depends_on:
@@ -57,4 +60,5 @@ services:
 
 volumes:
   sqlserver-data:
+  proof-data:
   web-node-modules:

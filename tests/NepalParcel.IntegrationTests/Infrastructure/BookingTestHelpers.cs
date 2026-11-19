@@ -156,10 +156,35 @@ internal sealed class BookingTestHelpers(NepalParcelApiFactory factory)
         return warehouse.Id;
     }
 
-    /// <summary>Registers a warehouse over HTTP as a branch manager and returns its id.</summary>
+    /// <summary>
+    /// A staff member who works at the branch (and optionally one of its warehouses). Staff must be assigned before they can
+    /// scan or change status at one of its warehouses.
+    /// </summary>
+    public async Task<HttpClient> StaffAtAsync(string role, Guid branchId, Guid? warehouseId = null)
+    {
+        var (client, userId) = await TestUsers.CreateClientWithIdAsync(factory, role);
+        await AssignAsync(userId, branchId, warehouseId);
+        return client;
+    }
+
+    /// <summary>Assigns a user to a branch (and optionally a warehouse) directly in the database.</summary>
+    public async Task AssignAsync(Guid userId, Guid branchId, Guid? warehouseId = null)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<NepalParcelDbContext>();
+        foreach (var old in await db.StaffAssignments.Where(a => a.UserId == userId && a.EndedAtUtc == null).ToListAsync())
+        {
+            old.End(DateTimeOffset.UtcNow, null);
+        }
+
+        db.StaffAssignments.Add(NepalParcel.Domain.Branches.StaffAssignment.Create(userId, branchId, warehouseId, DateTimeOffset.UtcNow, null));
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Registers a warehouse over HTTP as a super administrator and returns its id.</summary>
     public async Task<Guid> CreateWarehouseAsync(Guid branchId, string name = "Kathmandu Hub")
     {
-        var manager = await TestUsers.CreateClientAsync(factory, Roles.BranchManager);
+        var manager = await TestUsers.CreateClientAsync(factory, Roles.SuperAdmin);
         var response = await manager.PostAsJsonAsync(
             new Uri("/api/v1/warehouses", UriKind.Relative),
             new NepalParcel.Contracts.Warehouses.CreateWarehouseRequest(
