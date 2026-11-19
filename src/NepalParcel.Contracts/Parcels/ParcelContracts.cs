@@ -32,6 +32,8 @@ public sealed record BookingPartyDto(
 /// <param name="CodAmount">Optional goods amount in NPR to collect from the receiver on behalf of the sender (a COD fee applies).</param>
 /// <param name="PaymentReference">Optional payment reference (e.g. wallet transaction id) recorded by counter staff for prepaid bookings.</param>
 /// <param name="Notes">Optional internal notes (max 500 characters).</param>
+/// <param name="NotifyBySms">Whether the sender agrees to parcel updates by SMS. Leave out to keep what is already recorded (off for a new customer).</param>
+/// <param name="NotifyByWhatsApp">Whether the sender agrees to parcel updates on WhatsApp. Leave out to keep what is already recorded.</param>
 public sealed record BookParcelRequest(
     BookingPartyDto Sender,
     BookingPartyDto Receiver,
@@ -47,7 +49,9 @@ public sealed record BookParcelRequest(
     decimal? DeclaredValue = null,
     decimal? CodAmount = null,
     string? PaymentReference = null,
-    string? Notes = null);
+    string? Notes = null,
+    bool? NotifyBySms = null,
+    bool? NotifyByWhatsApp = null);
 
 /// <summary>Asks for the delivery charge of a parcel without booking it.</summary>
 /// <param name="OriginBranchId">Branch where the parcel will be handed over.</param>
@@ -301,3 +305,22 @@ public sealed record CreatePricingRuleRequest(
     Guid? ToServiceAreaId = null,
     DateTimeOffset? EffectiveFromUtc = null,
     DateTimeOffset? EffectiveToUtc = null);
+
+/// <summary>
+/// Everything needed to print a parcel label: the tracking number as a Code 128 barcode and as a QR code (both SVG images as
+/// <c>data:</c> addresses, ready for an <c>img</c> tag), and a few facts for the people handling it. Contains no phone numbers.
+/// </summary>
+public sealed record ParcelLabelResponse(
+    string TrackingNumber,
+    string BarcodeDataUri,
+    string QrDataUri,
+    string QrContent,
+    string ServiceType,
+    int Quantity,
+    decimal WeightKg,
+    string OriginBranch,
+    string DestinationArea,
+    string ReceiverName,
+    string ReceiverArea,
+    decimal CodAmount,
+    DateTimeOffset BookedAtUtc);

@@ -47,6 +47,16 @@ public interface IIdentityService
 
     Task<UserInfo?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Switches a login on or off. A switched-off account cannot sign in or refresh its session.</summary>
+    Task SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default);
+
+    /// <summary>Staff accounts (everyone except customers), A to Z by name, with their roles.</summary>
+    Task<(IReadOnlyList<UserInfo> Items, int TotalCount)> ListStaffAsync(
+        Network.StaffUserFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
     Task DeleteUserAsync(Guid id, CancellationToken cancellationToken = default);
 }
 

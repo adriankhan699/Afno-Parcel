@@ -8,6 +8,8 @@ using NepalParcel.Application.Common.Exceptions;
 using NepalParcel.Application.Common.Interfaces;
 using NepalParcel.Application.Common.Mapping;
 using NepalParcel.Application.Common.Validation;
+using NepalParcel.Application.Notifications;
+using NepalParcel.Application.Payments;
 using NepalParcel.Application.Tracking;
 using NepalParcel.Contracts.Common;
 using NepalParcel.Contracts.Parcels;
@@ -24,10 +26,13 @@ namespace NepalParcel.Application.Parcels;
 internal sealed partial class ParcelService(
     IParcelRepository parcels,
     IPaymentRepository payments,
+    PaymentLedger ledger,
     IBranchRepository branches,
     IWarehouseRepository warehouses,
     ICustomerRepository customers,
     IAuditLogRepository auditLogs,
+    INotificationPlanner notifications,
+    INotificationConsentRepository consentRepository,
     PriceEngine priceEngine,
     IUnitOfWork unitOfWork,
     ICurrentUser currentUser,
@@ -122,6 +127,13 @@ internal sealed partial class ParcelService(
         parcel.SetEstimatedDelivery(price.EstimatedDeliveryAtUtc);
         parcels.Add(parcel);
 
+        // What the customer said about SMS and WhatsApp updates is recorded first, so the booking message follows their choice.
+        var existingConsents = await consentRepository.GetChannelConsentsAsync(customer.Id, cancellationToken).ConfigureAwait(false);
+        var newConsents = NotificationPreferenceService.RecordChanges(
+            consentRepository, existingConsents, customer.Id, request.NotifyBySms, request.NotifyByWhatsApp,
+            counter ? ConsentSource.Counter : ConsentSource.Web, now, client.IpAddress);
+        await notifications.PlanAsync(parcel, parcel.StatusHistory.First(), [.. existingConsents, .. newConsents], cancellationToken).ConfigureAwait(false);
+
         Payment? payment = null;
         if (parcel.DeliveryCharge > 0)
         {
@@ -130,6 +142,7 @@ internal sealed partial class ParcelService(
             {
                 // Counter staff take the money (or check the wallet transfer) while the customer is standing there.
                 payment.MarkPaid(now, request.PaymentReference);
+                ledger.RecordManualSuccess(payment, method.ToString(), now, userId);
             }
 
             payments.Add(payment);
@@ -185,13 +198,13 @@ internal sealed partial class ParcelService(
 
     public async Task<ParcelResponse> GetByTrackingNumberAsync(string trackingNumber, CancellationToken cancellationToken = default)
     {
-        var normalized = TrackingNumbers.Normalize(trackingNumber);
-        var parcel = TrackingNumbers.IsValid(normalized)
+        // Accepts the number as typed, or the text a barcode or QR scanner read (a QR code holds the tracking link).
+        var parcel = TrackingNumbers.TryExtract(trackingNumber, out var normalized)
             ? await parcels.GetByTrackingNumberAsync(normalized, cancellationToken).ConfigureAwait(false)
             : null;
         if (parcel is null)
         {
-            throw new NotFoundException("Parcel", normalized);
+            throw new NotFoundException("Parcel", TrackingNumbers.Normalize(trackingNumber));
         }
 
         await EnsureCanViewAsync(parcel, cancellationToken).ConfigureAwait(false);
@@ -258,6 +271,7 @@ internal sealed partial class ParcelService(
 
         var now = clock.GetUtcNow();
         payment.MarkPaid(now, request.Reference);
+        ledger.RecordManualSuccess(payment, payment.Method.ToString(), now, currentUser.UserId);
         AddAudit(AuditActions.PaymentConfirmed, parcel.Id, now, new { parcel.TrackingNumber, method = payment.Method.ToString() });
         await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

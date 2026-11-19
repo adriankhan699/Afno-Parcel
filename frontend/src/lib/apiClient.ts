@@ -51,8 +51,9 @@ function send(path: string, init: ApiRequestInit, token: string | null): Promise
   const { skipAuth: _skipAuth, ...fetchInit } = init;
   void _skipAuth;
   const headers = new Headers(fetchInit.headers);
-  headers.set('Accept', 'application/json');
-  if (fetchInit.body !== undefined && !headers.has('Content-Type')) {
+  if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+  // A FormData body gets its multipart Content-Type (with the boundary) from the browser; it must never be set by hand.
+  if (fetchInit.body !== undefined && !(fetchInit.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   if (token) {
@@ -61,7 +62,8 @@ function send(path: string, init: ApiRequestInit, token: string | null): Promise
   return fetch(`${env.apiBaseUrl}${path}`, { ...fetchInit, headers });
 }
 
-export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+/** Sends the request with the bearer token and, on a 401, renews the access token once and retries. */
+async function execute(path: string, init: ApiRequestInit): Promise<Response> {
   const useAuth = !init.skipAuth && authHooks !== null;
   let response = await send(path, init, useAuth ? authHooks!.getAccessToken() : null);
 
@@ -76,15 +78,32 @@ export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Pr
   if (!response.ok) {
     throw new ApiError(response.status, await parseProblem(response));
   }
+  return response;
+}
 
+export async function apiRequest<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+  const response = await execute(path, init);
   if (response.status === 204) {
     return undefined as T;
   }
   return (await response.json()) as T;
 }
 
+/** Downloads a protected file (for example a proof image) with the bearer token. The token is never put in a URL. */
+export async function apiBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await execute(path, { method: 'GET', signal, headers: { Accept: '*/*' } });
+  return response.blob();
+}
+
 export const api = {
   get: <T>(path: string, signal?: AbortSignal) => apiRequest<T>(path, { method: 'GET', signal }),
   post: <T>(path: string, body: unknown, signal?: AbortSignal, init: ApiRequestInit = {}) =>
     apiRequest<T>(path, { ...init, method: 'POST', body: JSON.stringify(body), signal }),
+  /** A multipart/form-data POST (file uploads). The browser sets the Content-Type, including the boundary. */
+  postForm: <T>(path: string, form: FormData, signal?: AbortSignal) => apiRequest<T>(path, { method: 'POST', body: form, signal }),
+  /** A POST with no body (activate, deactivate...). */
+  postEmpty: <T>(path: string, signal?: AbortSignal) => apiRequest<T>(path, { method: 'POST', signal }),
+  put: <T>(path: string, body: unknown, signal?: AbortSignal) =>
+    apiRequest<T>(path, { method: 'PUT', body: JSON.stringify(body), signal }),
+  delete: <T = void>(path: string, signal?: AbortSignal) => apiRequest<T>(path, { method: 'DELETE', signal }),
 };

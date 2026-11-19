@@ -203,6 +203,15 @@ public sealed class Parcel : AuditableEntity
 
     public DateTimeOffset? EstimatedDeliveryAtUtc { get; private set; }
 
+    /// <summary>When the status last changed. Used to show how long a parcel has been waiting.</summary>
+    public DateTimeOffset StatusChangedAtUtc { get; private set; }
+
+    /// <summary>
+    /// While the parcel is on its way between warehouses: the warehouse it was dispatched to, if known. Cleared as soon as the
+    /// status changes to anything other than in transit.
+    /// </summary>
+    public Guid? NextWarehouseId { get; private set; }
+
     public DateTimeOffset? DeliveredAtUtc { get; private set; }
 
     public byte[] RowVersion { get; private set; } = [];
@@ -308,6 +317,7 @@ public sealed class Parcel : AuditableEntity
             CodAmount = goodsAmount + (details.PaymentMethod == PaymentMethod.CashOnDelivery ? deliveryCharge : 0m),
             Notes = Guard.Optional(details.Notes, "Notes", NotesMaxLength),
             BookedAtUtc = bookedAtUtc,
+            StatusChangedAtUtc = bookedAtUtc,
             CurrentStatusId = (int)ParcelStatusCode.BookingCreated,
         };
 
@@ -407,6 +417,12 @@ public sealed class Parcel : AuditableEntity
         _statusHistory.Add(history);
 
         CurrentStatusId = (int)to;
+        StatusChangedAtUtc = atUtc;
+        if (to != ParcelStatusCode.InTransit)
+        {
+            NextWarehouseId = null;
+        }
+
         if (to is ParcelStatusCode.InTransit or ParcelStatusCode.OutForDelivery)
         {
             // On a vehicle or with a rider: not at any branch or warehouse. The history row still says where it left from.
@@ -428,4 +444,15 @@ public sealed class Parcel : AuditableEntity
     }
 
     public void SetEstimatedDelivery(DateTimeOffset estimatedUtc) => EstimatedDeliveryAtUtc = estimatedUtc;
+
+    /// <summary>Records which warehouse an in-transit parcel is heading to. Only possible while the parcel is in transit.</summary>
+    public void SetNextWarehouse(Guid? warehouseId)
+    {
+        if (warehouseId is not null && Status != ParcelStatusCode.InTransit)
+        {
+            throw new DomainException("A destination warehouse can only be set while the parcel is in transit.");
+        }
+
+        NextWarehouseId = warehouseId;
+    }
 }

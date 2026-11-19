@@ -22,6 +22,12 @@ public sealed class DatabaseOptions
     /// </summary>
     public bool SeedReferenceData { get; set; }
 
+    /// <summary>
+    /// Adds the default WhatsApp and SMS message texts that are missing (never overwriting edited ones). On by default because
+    /// nothing can be sent without them; turn it off only if the database is prepared some other way.
+    /// </summary>
+    public bool SeedNotificationTemplates { get; set; } = true;
+
     [Range(1, 600)]
     public int CommandTimeoutSeconds { get; set; } = 30;
 

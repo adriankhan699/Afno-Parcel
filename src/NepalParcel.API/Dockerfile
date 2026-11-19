@@ -21,7 +21,9 @@ WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     DOTNET_RUNNING_IN_CONTAINER=true
 COPY --from=build /app/publish .
-# The aspnet image ships a non-root 'app' user.
+# Proofs of delivery (signatures and photos) are kept here, in private storage that is never served as static files.
+# Mount a volume on it so they survive new containers. The aspnet image ships a non-root 'app' user.
+RUN mkdir -p /var/afno/proofs && chown -R $APP_UID /var/afno
 USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "NepalParcel.API.dll"]

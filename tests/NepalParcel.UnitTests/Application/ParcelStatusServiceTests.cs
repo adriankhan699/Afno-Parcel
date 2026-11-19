@@ -21,40 +21,39 @@ namespace NepalParcel.UnitTests.Application;
 
 public sealed class ParcelStatusServiceTests
 {
+    private readonly NetworkSetup _net = new();
     private readonly IParcelRepository _parcels = Substitute.For<IParcelRepository>();
-    private readonly IBranchRepository _branches = Substitute.For<IBranchRepository>();
-    private readonly IWarehouseRepository _warehouses = Substitute.For<IWarehouseRepository>();
-    private readonly IAuditLogRepository _audit = Substitute.For<IAuditLogRepository>();
-    private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
-    private readonly ICurrentUser _currentUser = Substitute.For<ICurrentUser>();
-    private readonly IClientInfo _client = Substitute.For<IClientInfo>();
-    private readonly FixedClock _clock = new(TestData.Now.AddDays(10));
-    private readonly Guid _userId = Guid.NewGuid();
-    private readonly Branch _branch = Branch.Create("KTM01", "Kathmandu Main", BranchType.Branch, TestData.KathmanduAddress(), "9841000000");
-    private readonly Warehouse _warehouse;
     private readonly ParcelStatusService _sut;
 
     public ParcelStatusServiceTests()
     {
-        _warehouse = Warehouse.Create(_branch.Id, "KTMW1", "Kathmandu Hub", TestData.KathmanduAddress(), "9841000001");
-        _currentUser.UserId.Returns(_userId);
-        _currentUser.UserName.Returns("Hari Staff");
-        _branches.GetByIdAsync(_branch.Id, Arg.Any<CancellationToken>()).Returns(_branch);
-        _warehouses.GetByIdAsync(_warehouse.Id, Arg.Any<CancellationToken>()).Returns(_warehouse);
+        // Staff work at the Kathmandu branch (and so at all of its warehouses) unless a test says otherwise.
+        _net.AssignMe(_net.Kathmandu);
 
         _sut = new ParcelStatusService(
-            _parcels, _branches, _warehouses, _audit, _unitOfWork, _currentUser, _client, _clock,
+            _parcels,
+            _net.Changer,
+            _net.UnitOfWork,
+            _net.CurrentUser,
             new UpdateParcelStatusRequestValidator(),
-            new ScanRequestValidator(),
-            new BatchScanRequestValidator(),
             NullLogger<ParcelStatusService>.Instance);
     }
 
-    private void SignInAs(string role)
-    {
-        _currentUser.IsInRole(Arg.Any<string>()).Returns(false);
-        _currentUser.IsInRole(role).Returns(true);
-    }
+    private IAuditLogRepository _audit => _net.Audit;
+
+    private IUnitOfWork _unitOfWork => _net.UnitOfWork;
+
+    private ICurrentUser _currentUser => _net.CurrentUser;
+
+    private FixedClock _clock => _net.Clock;
+
+    private Guid _userId => _net.UserId;
+
+    private Branch _branch => _net.Kathmandu;
+
+    private Warehouse _warehouse => _net.Hub;
+
+    private void SignInAs(string role) => _net.SignInAs(role);
 
     private Parcel Stored(ParcelStatusCode at = ParcelStatusCode.BookingCreated)
     {
@@ -186,7 +185,7 @@ public sealed class ParcelStatusServiceTests
     [Fact]
     public async Task Update_FailedDelivery_NeedsRemarks()
     {
-        SignInAs(Roles.DeliveryAgent);
+        SignInAs(Roles.BranchManager);
         var parcel = Stored(ParcelStatusCode.OutForDelivery);
 
         await Assert.ThrowsAsync<DomainException>(() => _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("DeliveryFailed")));
@@ -269,180 +268,112 @@ public sealed class ParcelStatusServiceTests
         await Assert.ThrowsAsync<ConcurrencyException>(() => _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("PickedUp")));
     }
 
-    // ---- scanning ----------------------------------------------------------------------------------------------
+    // ---- changes made at a warehouse -----------------------------------------------------------------------------
 
     [Fact]
-    public async Task Scan_Arrival_RecordsArrivedAtWarehouse_AtThatWarehouse()
+    public async Task Update_AtAWarehouse_AlsoRecordsTheWarehouseMovement()
     {
         SignInAs(Roles.WarehouseStaff);
         var parcel = Stored(ParcelStatusCode.InTransit);
 
-        var response = await _sut.ScanAsync(new ScanRequest(parcel.TrackingNumber, "Arrival", _warehouse.Id, "Scanned at dock 2"));
+        await _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("ArrivedAtWarehouse", "At dock", WarehouseId: _warehouse.Id));
 
-        Assert.Equal("ArrivedAtWarehouse", response.Status);
-        Assert.Equal("Kathmandu Hub", response.Location);
-        var row = parcel.StatusHistory.OrderBy(h => h.OccurredAtUtc).Last();
-        Assert.Equal(_warehouse.Id, row.WarehouseId);
-        Assert.Equal(_userId, row.ChangedByUserId);
-        Assert.Equal("Scanned at dock 2", row.Remarks);
-    }
-
-    [Theory]
-    [InlineData("Dispatch", ParcelStatusCode.ArrivedAtWarehouse, "InTransit")]
-    [InlineData("OutForDelivery", ParcelStatusCode.ArrivedAtWarehouse, "OutForDelivery")]
-    [InlineData("arrival", ParcelStatusCode.InTransit, "ArrivedAtWarehouse")]
-    public async Task Scan_Types_MapToTheRightStatus(string scanType, ParcelStatusCode startAt, string expected)
-    {
-        SignInAs(Roles.WarehouseStaff);
-        var parcel = Stored(startAt);
-
-        var response = await _sut.ScanAsync(new ScanRequest(parcel.TrackingNumber, scanType, _warehouse.Id));
-
-        Assert.Equal(expected, response.Status);
+        _net.Movements.Received(1).AddMovement(Arg.Is<ParcelMovement>(m =>
+            m.ParcelId == parcel.Id &&
+            m.WarehouseId == _warehouse.Id &&
+            m.ScanType == ScanType.Arrival &&
+            m.StaffUserId == _userId &&
+            m.Remarks == "At dock" &&
+            !m.IsUnexpectedArrival));
     }
 
     [Fact]
-    public async Task Scan_ScanningTheSameParcelTwice_FailsTheSecondTime()
-    {
-        SignInAs(Roles.WarehouseStaff);
-        var parcel = Stored(ParcelStatusCode.InTransit);
-        await _sut.ScanAsync(new ScanRequest(parcel.TrackingNumber, "Arrival", _warehouse.Id));
-        var rowsAfterFirstScan = parcel.StatusHistory.Count;
-
-        var ex = await Assert.ThrowsAsync<DomainException>(() => _sut.ScanAsync(new ScanRequest(parcel.TrackingNumber, "Arrival", _warehouse.Id)));
-
-        Assert.Contains("cannot move to", ex.Message, StringComparison.Ordinal);
-        Assert.Equal(rowsAfterFirstScan, parcel.StatusHistory.Count);
-    }
-
-    [Fact]
-    public async Task Scan_ByCounterStaff_IsForbidden()
+    public async Task Update_AChangeAtABranch_RecordsNoWarehouseMovement()
     {
         SignInAs(Roles.BookingStaff);
-        var parcel = Stored(ParcelStatusCode.InTransit);
+        var parcel = Stored(ParcelStatusCode.PickedUp);
 
-        await Assert.ThrowsAsync<ForbiddenException>(() => _sut.ScanAsync(new ScanRequest(parcel.TrackingNumber, "Arrival", _warehouse.Id)));
+        await _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("Shipped", BranchId: _branch.Id));
+
+        _net.Movements.DidNotReceive().AddMovement(Arg.Any<ParcelMovement>());
     }
 
     [Fact]
-    public async Task Scan_UnknownTrackingNumber_UnknownWarehouse_AndBadType_AreRefused()
+    public async Task Update_DispatchingFromAWarehouse_CanNameTheNextWarehouse()
+    {
+        SignInAs(Roles.WarehouseStaff);
+        var parcel = Stored(ParcelStatusCode.ArrivedAtWarehouse);
+
+        var response = await _sut.UpdateAsync(
+            parcel.Id,
+            new UpdateParcelStatusRequest("InTransit", WarehouseId: _warehouse.Id, ToWarehouseId: _net.Hub2.Id));
+
+        Assert.Equal("InTransit", response.Status);
+        Assert.Equal(_net.Hub2.Id, parcel.NextWarehouseId);
+        _net.Movements.Received(1).AddMovement(Arg.Is<ParcelMovement>(m => m.ScanType == ScanType.Dispatch && m.ToWarehouseId == _net.Hub2.Id));
+    }
+
+    [Fact]
+    public async Task Update_ADestinationOnAnyOtherChange_OrToTheSameWarehouse_IsRefused()
+    {
+        SignInAs(Roles.WarehouseStaff);
+        var arriving = Stored(ParcelStatusCode.InTransit);
+        var leaving = Stored(ParcelStatusCode.ArrivedAtWarehouse);
+
+        await Assert.ThrowsAsync<DomainException>(() =>
+            _sut.UpdateAsync(arriving.Id, new UpdateParcelStatusRequest("ArrivedAtWarehouse", WarehouseId: _warehouse.Id, ToWarehouseId: _net.Hub2.Id)));
+        await Assert.ThrowsAsync<DomainException>(() =>
+            _sut.UpdateAsync(leaving.Id, new UpdateParcelStatusRequest("InTransit", WarehouseId: _warehouse.Id, ToWarehouseId: _warehouse.Id)));
+        await Assert.ThrowsAsync<DomainException>(() =>
+            _sut.UpdateAsync(leaving.Id, new UpdateParcelStatusRequest("InTransit", ToWarehouseId: _net.Hub2.Id)));
+
+        Assert.Equal(ParcelStatusCode.InTransit, arriving.Status);
+        Assert.Equal(ParcelStatusCode.ArrivedAtWarehouse, leaving.Status);
+    }
+
+    [Fact]
+    public async Task Update_AtAWarehouse_ByStaffWhoAreNotAssignedThere_IsForbidden()
     {
         SignInAs(Roles.WarehouseStaff);
         var parcel = Stored(ParcelStatusCode.InTransit);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.ScanAsync(new ScanRequest(TrackingNumbers.Generate(), "Arrival", _warehouse.Id)));
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.ScanAsync(new ScanRequest(parcel.TrackingNumber, "Arrival", Guid.NewGuid())));
-        await Assert.ThrowsAsync<RequestValidationException>(() => _sut.ScanAsync(new ScanRequest(parcel.TrackingNumber, "Teleport", _warehouse.Id)));
-        Assert.Equal(ParcelStatusCode.InTransit, parcel.Status);
-    }
-
-    // ---- batch scanning ----------------------------------------------------------------------------------------
-
-    [Fact]
-    public async Task Batch_EachParcelSucceedsOrFailsOnItsOwn()
-    {
-        SignInAs(Roles.WarehouseStaff);
-        var good1 = Stored(ParcelStatusCode.InTransit);
-        var good2 = Stored(ParcelStatusCode.Shipped);
-        var wrongState = Stored(ParcelStatusCode.PickedUp); // cannot arrive at a warehouse before it is shipped
-        var unknown = TrackingNumbers.Generate();
-
-        var result = await _sut.ScanBatchAsync(new BatchScanRequest(
-            "Arrival",
-            _warehouse.Id,
-            [good1.TrackingNumber, wrongState.TrackingNumber, unknown, "not-a-number", good2.TrackingNumber]));
-
-        Assert.Equal(2, result.Succeeded);
-        Assert.Equal(3, result.Failed);
-        Assert.Equal(5, result.Results.Count);
-        Assert.True(result.Results.Single(r => r.TrackingNumber == good1.TrackingNumber).Succeeded);
-        Assert.True(result.Results.Single(r => r.TrackingNumber == good2.TrackingNumber).Succeeded);
-        Assert.Contains("cannot move to", result.Results.Single(r => r.TrackingNumber == wrongState.TrackingNumber).Error, StringComparison.Ordinal);
-        Assert.Contains("No parcel", result.Results.Single(r => r.TrackingNumber == unknown).Error, StringComparison.Ordinal);
-        Assert.False(result.Results.Single(r => r.TrackingNumber == "NOTANUMBER").Succeeded);
-
-        Assert.Equal(ParcelStatusCode.ArrivedAtWarehouse, good1.Status);
-        Assert.Equal(ParcelStatusCode.ArrivedAtWarehouse, good2.Status);
-        Assert.Equal(ParcelStatusCode.PickedUp, wrongState.Status);
-        _unitOfWork.Received(1).DiscardPendingChanges(); // only the parcel whose move was refused had anything staged
-    }
-
-    [Fact]
-    public async Task Batch_ScansEachParcelOnce_EvenIfItIsListedTwice()
-    {
-        SignInAs(Roles.WarehouseStaff);
-        var parcel = Stored(ParcelStatusCode.InTransit);
-
-        var result = await _sut.ScanBatchAsync(new BatchScanRequest(
-            "Arrival", _warehouse.Id, [parcel.TrackingNumber, parcel.TrackingNumber.ToLowerInvariant(), parcel.TrackingNumber]));
-
-        Assert.Single(result.Results);
-        Assert.Equal(1, result.Succeeded);
-        Assert.Equal(1, parcel.StatusHistory.Count(h => h.ToStatusId == (int)ParcelStatusCode.ArrivedAtWarehouse));
-    }
-
-    [Fact]
-    public async Task Batch_ABlankEntry_FailsValidation()
-    {
-        SignInAs(Roles.WarehouseStaff);
-        var parcel = Stored(ParcelStatusCode.InTransit);
-
-        await Assert.ThrowsAsync<RequestValidationException>(() =>
-            _sut.ScanBatchAsync(new BatchScanRequest("Arrival", _warehouse.Id, [parcel.TrackingNumber, "  "])));
-
-        Assert.Equal(ParcelStatusCode.InTransit, parcel.Status);
-    }
-
-    [Fact]
-    public async Task Batch_ABadWarehouse_FailsTheWholeRequest_BeforeAnythingIsScanned()
-    {
-        SignInAs(Roles.WarehouseStaff);
-        var parcel = Stored(ParcelStatusCode.InTransit);
-
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            _sut.ScanBatchAsync(new BatchScanRequest("Arrival", Guid.NewGuid(), [parcel.TrackingNumber])));
-
-        Assert.Equal(ParcelStatusCode.InTransit, parcel.Status);
-    }
-
-    [Fact]
-    public async Task Batch_ByARoleThatMayNotScan_IsForbidden()
-    {
-        SignInAs(Roles.DeliveryAgent);
-        var parcel = Stored(ParcelStatusCode.InTransit);
-
+        _net.AssignMe(_net.Pokhara);
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            _sut.ScanBatchAsync(new BatchScanRequest("Arrival", _warehouse.Id, [parcel.TrackingNumber])));
+            _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("ArrivedAtWarehouse", WarehouseId: _warehouse.Id)));
+
+        _net.AssignMe(_net.Kathmandu, _net.Hub2);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("ArrivedAtWarehouse", WarehouseId: _warehouse.Id)));
+
+        _net.Assignments.GetActiveByUserIdAsync(_userId, Arg.Any<CancellationToken>()).Returns((StaffAssignment?)null);
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("ArrivedAtWarehouse", WarehouseId: _warehouse.Id)));
+
+        Assert.Equal(ParcelStatusCode.InTransit, parcel.Status);
+        _net.Movements.DidNotReceive().AddMovement(Arg.Any<ParcelMovement>());
+        await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Batch_Limits_AreEnforced()
+    public async Task Update_AtAWarehouse_ASuperAdministratorNeedsNoAssignment()
     {
-        SignInAs(Roles.WarehouseStaff);
+        SignInAs(Roles.SuperAdmin);
+        _net.Assignments.GetActiveByUserIdAsync(_userId, Arg.Any<CancellationToken>()).Returns((StaffAssignment?)null);
+        var parcel = Stored(ParcelStatusCode.InTransit);
 
-        await Assert.ThrowsAsync<RequestValidationException>(() => _sut.ScanBatchAsync(new BatchScanRequest("Arrival", _warehouse.Id, [])));
-        var tooMany = Enumerable.Range(0, 101).Select(_ => TrackingNumbers.Generate()).ToList();
-        await Assert.ThrowsAsync<RequestValidationException>(() => _sut.ScanBatchAsync(new BatchScanRequest("Arrival", _warehouse.Id, tooMany)));
+        var response = await _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("ArrivedAtWarehouse", WarehouseId: _net.PokharaHub.Id));
 
-        var max = Enumerable.Range(0, 100).Select(_ => TrackingNumbers.Generate()).ToList();
-        var result = await _sut.ScanBatchAsync(new BatchScanRequest("Arrival", _warehouse.Id, max));
-        Assert.Equal(100, result.Failed);
+        Assert.Equal("ArrivedAtWarehouse", response.Status);
     }
 
     [Fact]
-    public async Task Batch_AConflictOnOneParcel_DoesNotStopTheRest()
+    public async Task Update_RecordsWhenTheStatusLastChanged()
     {
-        SignInAs(Roles.WarehouseStaff);
-        var first = Stored(ParcelStatusCode.InTransit);
-        var second = Stored(ParcelStatusCode.InTransit);
-        _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(
-            _ => throw new ConcurrencyException(),
-            _ => Task.FromResult(1));
+        SignInAs(Roles.BookingStaff);
+        var parcel = Stored();
 
-        var result = await _sut.ScanBatchAsync(new BatchScanRequest("Arrival", _warehouse.Id, [first.TrackingNumber, second.TrackingNumber]));
+        await _sut.UpdateAsync(parcel.Id, new UpdateParcelStatusRequest("PickedUp"));
 
-        Assert.Equal(1, result.Succeeded);
-        Assert.Equal(1, result.Failed);
-        Assert.Contains("modified by someone else", result.Results[0].Error, StringComparison.Ordinal);
+        Assert.Equal(_clock.GetUtcNow(), parcel.StatusChangedAtUtc);
     }
 }

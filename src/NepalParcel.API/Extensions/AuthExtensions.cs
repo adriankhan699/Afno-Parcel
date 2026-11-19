@@ -78,6 +78,8 @@ internal static class AuthExtensions
 
             limiter.AddPolicy(RateLimitSettings.TrackingPolicy, context =>
                 PerIp(context, "tracking", c => c.RequestServices.GetRequiredService<IOptions<RateLimitSettings>>().Value.TrackingPermitPerMinute));
+            limiter.AddPolicy(RateLimitSettings.WebhookPolicy, context =>
+                PerIp(context, "webhook", c => c.RequestServices.GetRequiredService<IOptions<RateLimitSettings>>().Value.WebhookPermitPerMinute));
             limiter.AddPolicy(RateLimitSettings.TrackingOtpPolicy, context =>
                 PerIp(context, "tracking-otp", c => c.RequestServices.GetRequiredService<IOptions<RateLimitSettings>>().Value.TrackingOtpPermitPerMinute));
 

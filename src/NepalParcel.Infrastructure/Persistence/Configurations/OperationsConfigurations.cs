@@ -20,13 +20,27 @@ internal sealed class NotificationOutboxConfiguration : IEntityTypeConfiguration
         builder.Property(m => m.Recipient).HasMaxLength(256).IsRequired();
         builder.Property(m => m.TemplateKey).HasMaxLength(100).IsRequired();
         builder.Property(m => m.PayloadJson).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(m => m.Language).HasMaxLength(10).IsRequired();
+        builder.Property(m => m.DedupeKey).HasMaxLength(100);
         builder.Property(m => m.LastError).HasMaxLength(1000);
+        builder.Property(m => m.SkipReason).HasMaxLength(300);
+        builder.Property(m => m.Provider).HasMaxLength(50);
+        builder.Property(m => m.ProviderMessageId).HasMaxLength(100);
+        builder.Property(m => m.RenderedBody).HasMaxLength(1000);
+        builder.Property(m => m.DeliveryError).HasMaxLength(500);
         builder.Property(m => m.RowVersion).IsRowVersion();
 
         // The worker polls for due messages.
         builder.HasIndex(m => new { m.Status, m.NextAttemptAtUtc });
         builder.HasIndex(m => m.ParcelId);
         builder.HasIndex(m => m.CustomerId);
+        builder.HasIndex(m => m.CreatedAtUtc);
+
+        // The same parcel event is queued once per audience and channel, however many times it is attempted.
+        builder.HasIndex(m => new { m.DedupeKey, m.Audience, m.Channel }).IsUnique().HasFilter("[DedupeKey] IS NOT NULL");
+
+        // Delivery reports find their message by the provider's id.
+        builder.HasIndex(m => new { m.Provider, m.ProviderMessageId }).IsUnique().HasFilter("[ProviderMessageId] IS NOT NULL");
 
         builder.HasOne<Parcel>().WithMany().HasForeignKey(m => m.ParcelId);
         builder.HasOne<Customer>().WithMany().HasForeignKey(m => m.CustomerId);
@@ -49,6 +63,56 @@ internal sealed class NotificationLogConfiguration : IEntityTypeConfiguration<No
         builder.HasIndex(l => l.CreatedAtUtc);
 
         builder.HasOne<NotificationOutboxMessage>().WithMany().HasForeignKey(l => l.OutboxMessageId);
+    }
+}
+
+internal sealed class NotificationTemplateConfiguration : IEntityTypeConfiguration<NotificationTemplate>
+{
+    public void Configure(EntityTypeBuilder<NotificationTemplate> builder)
+    {
+        builder.ToTable("NotificationTemplates");
+        builder.ConfigureEntity();
+
+        builder.Property(t => t.Key).HasMaxLength(100).IsRequired();
+        builder.Property(t => t.Language).HasMaxLength(10).IsRequired();
+        builder.Property(t => t.Body).HasMaxLength(NotificationTemplate.MaxBodyLength).IsRequired();
+        builder.Property(t => t.ProviderTemplateName).HasMaxLength(100);
+        builder.Property(t => t.RowVersion).IsRowVersion();
+
+        builder.HasIndex(t => new { t.Key, t.Channel, t.Language }).IsUnique();
+    }
+}
+
+internal sealed class NotificationOptOutConfiguration : IEntityTypeConfiguration<NotificationOptOut>
+{
+    public void Configure(EntityTypeBuilder<NotificationOptOut> builder)
+    {
+        builder.ToTable("NotificationOptOuts");
+        builder.ConfigureEntity();
+
+        builder.Property(o => o.PhoneNumber).HasMaxLength(20).IsRequired();
+
+        // One opt-out in force per number and channel; lifted ones stay as history.
+        builder.HasIndex(o => new { o.PhoneNumber, o.Channel }).IsUnique().HasFilter("[RemovedAtUtc] IS NULL");
+        builder.HasIndex(o => o.CreatedAtUtc);
+    }
+}
+
+internal sealed class MockProviderMessageConfiguration : IEntityTypeConfiguration<MockProviderMessage>
+{
+    public void Configure(EntityTypeBuilder<MockProviderMessage> builder)
+    {
+        builder.ToTable("MockProviderMessages");
+        builder.ConfigureEntity();
+
+        builder.Property(m => m.ProviderMessageId).HasMaxLength(100).IsRequired();
+        builder.Property(m => m.To).HasMaxLength(30).IsRequired();
+        builder.Property(m => m.Body).HasMaxLength(2000).IsRequired();
+        builder.Property(m => m.TemplateName).HasMaxLength(100);
+        builder.Property(m => m.ParametersJson).HasColumnType("nvarchar(max)").IsRequired();
+
+        builder.HasIndex(m => m.ProviderMessageId).IsUnique();
+        builder.HasIndex(m => m.CreatedAtUtc);
     }
 }
 

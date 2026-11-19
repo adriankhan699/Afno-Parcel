@@ -10,6 +10,7 @@ import {
   locationRequirement,
   remarksRequired,
   resolveLocationKind,
+  usesDestinationWarehouse,
   validateStatusForm,
   type LocationKind,
   type StatusForm,
@@ -19,7 +20,7 @@ import { Alert, PrimaryButton, SelectField, TextAreaField } from './form';
 
 interface StatusUpdatePanelProps {
   parcelId: string;
-  /** The statuses the server says this user may set right now. */
+  /** The statuses this user may set right now (see statusesOfferedTo): empty means the panel is not shown. */
   allowedStatuses: readonly string[];
   /** Called after a successful update so the page can reload the parcel (and its history). */
   onChanged: () => Promise<void>;
@@ -73,6 +74,9 @@ export default function StatusUpdatePanel({ parcelId, allowedStatuses, onChanged
     warehouses.status === 'loaded' ? warehouses.data.items.filter((w) => w.isActive).map((w) => ({ value: w.id, label: `${w.name} (${w.code})` })) : [];
 
   const showKindChoice = requirement === 'either' || requirement === 'optional';
+
+  // Nothing to offer (for example a delivery agent, who delivers through the agent app): show no panel at all.
+  if (allowedStatuses.length === 0) return null;
 
   return (
     <section aria-labelledby="status-heading" className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -145,6 +149,19 @@ export default function StatusUpdatePanel({ parcelId, allowedStatuses, onChanged
             options={warehouseOptions}
             error={errors.warehouseId}
             hint={warehouses.status === 'error' ? 'Could not load warehouses.' : undefined}
+          />
+        )}
+
+        {usesDestinationWarehouse(status) && (
+          <SelectField
+            id="toWarehouseId"
+            label="Heading to warehouse (optional)"
+            placeholder="Not specified"
+            value={form.toWarehouseId}
+            onChange={(toWarehouseId) => set({ toWarehouseId })}
+            options={warehouseOptions.filter((o) => !(kind === 'warehouse' && o.value === form.warehouseId))}
+            error={errors.toWarehouseId}
+            hint="The warehouse this parcel is travelling to. It will show as inbound there."
           />
         )}
 

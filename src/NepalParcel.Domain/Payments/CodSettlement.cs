@@ -31,6 +31,12 @@ public sealed class CodSettlement : AuditableEntity
 
     public SettlementStatus Status { get; private set; }
 
+    /// <summary>What the accountant counted when the cash was handed over. Null until then.</summary>
+    public decimal? CountedAmount { get; private set; }
+
+    /// <summary>Counted minus expected: negative is a shortage, positive an excess.</summary>
+    public decimal? Variance => CountedAmount is { } counted ? counted - TotalAmount : null;
+
     public DateTimeOffset? SubmittedAtUtc { get; private set; }
 
     public DateTimeOffset? VerifiedAtUtc { get; private set; }
@@ -59,26 +65,55 @@ public sealed class CodSettlement : AuditableEntity
         };
     }
 
-    public void Submit(DateTimeOffset atUtc)
+    public void Submit(DateTimeOffset atUtc, string? remarks = null)
     {
         Require(SettlementStatus.Draft);
+        var text = Guard.Optional(remarks, "Remarks", 500);
         Status = SettlementStatus.Submitted;
         SubmittedAtUtc = atUtc;
+        Remarks = text;
     }
 
-    public void Verify(DateTimeOffset atUtc, Guid verifiedByUserId)
+    /// <summary>The count matches the total: the settlement is accepted.</summary>
+    public void Verify(DateTimeOffset atUtc, Guid verifiedByUserId, decimal countedAmount, string? remarks = null)
     {
         Require(SettlementStatus.Submitted);
+        var counted = Guard.NonNegative(countedAmount, "Counted amount");
+        if (counted != TotalAmount)
+        {
+            throw new DomainException("The counted amount does not match the settlement total, so it cannot be verified. Dispute it instead.");
+        }
+
+        var by = Guard.NotEmpty(verifiedByUserId, "Verifier");
+        Status = SettlementStatus.Verified;
+        CountedAmount = counted;
+        VerifiedAtUtc = atUtc;
+        VerifiedByUserId = by;
+        Remarks = Guard.Optional(remarks, "Remarks", 500) ?? Remarks;
+    }
+
+    /// <summary>The count differs from the total: a shortage or an excess that someone has to explain.</summary>
+    public void Dispute(string remarks, decimal countedAmount, Guid? disputedByUserId = null)
+    {
+        Require(SettlementStatus.Submitted);
+        var text = Guard.NotBlank(remarks, "Remarks", 500);
+        var counted = Guard.NonNegative(countedAmount, "Counted amount");
+        Status = SettlementStatus.Disputed;
+        CountedAmount = counted;
+        VerifiedByUserId = disputedByUserId;
+        Remarks = text;
+    }
+
+    /// <summary>A disputed settlement is looked into and accepted. The count and the variance stay on the record.</summary>
+    public void Resolve(DateTimeOffset atUtc, Guid resolvedByUserId, string remarks)
+    {
+        Require(SettlementStatus.Disputed);
+        var text = Guard.NotBlank(remarks, "Remarks", 500);
+        var by = Guard.NotEmpty(resolvedByUserId, "Resolver");
         Status = SettlementStatus.Verified;
         VerifiedAtUtc = atUtc;
-        VerifiedByUserId = Guard.NotEmpty(verifiedByUserId, "Verifier");
-    }
-
-    public void Dispute(string remarks)
-    {
-        Require(SettlementStatus.Submitted);
-        Status = SettlementStatus.Disputed;
-        Remarks = Guard.NotBlank(remarks, "Remarks", 500);
+        VerifiedByUserId = by;
+        Remarks = text;
     }
 
     private void Require(SettlementStatus expected)

@@ -116,7 +116,7 @@ public sealed class TrackingEndpointsTests(NepalParcelApiFactory factory) : ICla
         var booked = await BookWithPrivateDetailsAsync();
         var warehouse = await _helpers.CreateWarehouseAsync(booked.Branch, "Kathmandu Hub");
         var counter = await _helpers.StaffAsync(Roles.BookingStaff);
-        var hub = await _helpers.StaffAsync(Roles.WarehouseStaff);
+        var hub = await _helpers.StaffAtAsync(Roles.WarehouseStaff, booked.Branch);
         var anonymous = factory.CreateClient();
 
         (await counter.PostAsJsonAsync(StatusUri(booked.Parcel.Id), To("PickedUp"))).EnsureSuccessStatusCode();
@@ -294,7 +294,7 @@ public sealed class TrackingEndpointsTests(NepalParcelApiFactory factory) : ICla
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<NepalParcelDbContext>();
-        var message = await db.NotificationOutbox.AsNoTracking().SingleAsync(m => m.ParcelId == booked.Parcel.Id);
+        var message = await db.NotificationOutbox.AsNoTracking().SingleAsync(m => m.ParcelId == booked.Parcel.Id && m.TemplateKey == "tracking-otp");
         var otp = await db.TrackingOtps.AsNoTracking().SingleAsync(o => o.ParcelId == booked.Parcel.Id);
         var audit = await db.AuditLogs.AsNoTracking().Where(a => a.EntityId == booked.Parcel.Id.ToString() && a.Action.StartsWith("TrackingOtp")).ToListAsync();
 
@@ -437,7 +437,7 @@ public sealed class TrackingEndpointsTests(NepalParcelApiFactory factory) : ICla
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<NepalParcelDbContext>();
         Assert.Equal(3, await db.TrackingOtps.CountAsync(o => o.ParcelId == booked.Parcel.Id));
-        Assert.Equal(3, await db.NotificationOutbox.CountAsync(m => m.ParcelId == booked.Parcel.Id));
+        Assert.Equal(3, await db.NotificationOutbox.CountAsync(m => m.ParcelId == booked.Parcel.Id && m.TemplateKey == "tracking-otp"));
     }
 
     // ---- access tokens -----------------------------------------------------------------------------------------

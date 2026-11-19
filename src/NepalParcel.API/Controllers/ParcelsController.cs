@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using NepalParcel.API.Options;
+using NepalParcel.Application.Network;
 using NepalParcel.Application.Parcels;
 using NepalParcel.Contracts.Common;
 using NepalParcel.Contracts.Parcels;
+using NepalParcel.Contracts.Tracking;
 using NepalParcel.Domain.Identity;
 
 namespace NepalParcel.API.Controllers;
@@ -13,7 +15,7 @@ namespace NepalParcel.API.Controllers;
 [ApiController]
 [Route("api/v1/parcels")]
 [Produces("application/json")]
-public sealed class ParcelsController(IParcelService parcelService) : ControllerBase
+public sealed class ParcelsController(IParcelService parcelService, IScanService scanService, IParcelLabelService labelService) : ControllerBase
 {
     /// <summary>
     /// Books a parcel. Customers book for themselves online; counter staff book for walk-in customers.
@@ -66,6 +68,41 @@ public sealed class ParcelsController(IParcelService parcelService) : Controller
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ParcelResponse>> GetByTrackingNumber(string trackingNumber, CancellationToken cancellationToken) =>
         Ok(await parcelService.GetByTrackingNumberAsync(trackingNumber, cancellationToken));
+
+    /// <summary>
+    /// Finds a parcel from the text a barcode or QR scanner read (the tracking number, or the tracking link a QR code holds).
+    /// Staff only.
+    /// </summary>
+    [HttpGet("lookup")]
+    [Authorize(Roles = Roles.ParcelViewersCsv)]
+    [ProducesResponseType<ParcelResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ParcelResponse>> Lookup([FromQuery] string code, CancellationToken cancellationToken) =>
+        Ok(await parcelService.GetByTrackingNumberAsync(code ?? string.Empty, cancellationToken));
+
+    /// <summary>The parcel's warehouse arrivals and departures, oldest first. Staff only.</summary>
+    [HttpGet("{id:guid}/movements")]
+    [Authorize(Roles = Roles.ParcelViewersCsv)]
+    [ProducesResponseType<IReadOnlyList<ParcelMovementResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IReadOnlyList<ParcelMovementResponse>>> GetMovements(Guid id, CancellationToken cancellationToken) =>
+        Ok(await scanService.GetMovementsAsync(id, cancellationToken));
+
+    /// <summary>
+    /// The parcel's label: the tracking number as a Code 128 barcode and as a QR code (SVG images as <c>data:</c> addresses),
+    /// plus the facts needed to handle it. The sender and staff can print it.
+    /// </summary>
+    [HttpGet("{id:guid}/label")]
+    [Authorize(Roles = Roles.ParcelReadersCsv)]
+    [ProducesResponseType<ParcelLabelResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ParcelLabelResponse>> GetLabel(Guid id, CancellationToken cancellationToken) =>
+        Ok(await labelService.GetLabelAsync(id, cancellationToken));
 
     /// <summary>Gets the printable booking receipt.</summary>
     [HttpGet("{id:guid}/receipt")]

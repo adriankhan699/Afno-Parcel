@@ -1,10 +1,14 @@
 using Microsoft.AspNetCore.Identity;
 using NepalParcel.Application.Auth;
+using Microsoft.EntityFrameworkCore;
+using NepalParcel.Application.Network;
 using NepalParcel.Domain.Common;
+using NepalParcel.Domain.Identity;
+using NepalParcel.Infrastructure.Persistence;
 
 namespace NepalParcel.Infrastructure.Identity;
 
-internal sealed class IdentityService(UserManager<ApplicationUser> users, TimeProvider clock) : IIdentityService
+internal sealed class IdentityService(UserManager<ApplicationUser> users, NepalParcelDbContext db, TimeProvider clock) : IIdentityService
 {
     public async Task<CreateUserResult> CreateUserAsync(
         string fullName,
@@ -90,6 +94,79 @@ internal sealed class IdentityService(UserManager<ApplicationUser> users, TimePr
 
         var roles = await users.GetRolesAsync(user).ConfigureAwait(false);
         return ToInfo(user, roles.ToList());
+    }
+
+    public async Task SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default)
+    {
+        var user = await users.FindByIdAsync(id.ToString()).ConfigureAwait(false);
+        if (user is null || user.IsActive == isActive)
+        {
+            return;
+        }
+
+        user.IsActive = isActive;
+        var updated = await users.UpdateAsync(user).ConfigureAwait(false);
+        if (!updated.Succeeded)
+        {
+            throw new InvalidOperationException("The account could not be updated: " + string.Join("; ", updated.Errors.Select(e => e.Description)));
+        }
+    }
+
+    public async Task<(IReadOnlyList<UserInfo> Items, int TotalCount)> ListStaffAsync(
+        StaffUserFilter filter,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        // Staff are everyone with a role other than Customer. A role filter narrows that to one role.
+        var staffRoles = Roles.Staff.ToArray();
+        var roleNames = string.IsNullOrWhiteSpace(filter.Role)
+            ? staffRoles
+            : staffRoles.Where(r => string.Equals(r, filter.Role.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
+
+        var staffUserIds = db.UserRoles
+            .Join(db.Roles.Where(r => roleNames.Contains(r.Name!)), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
+            .Distinct();
+        var query = db.Users.AsNoTracking().Where(u => staffUserIds.Contains(u.Id));
+
+        if (filter.OnlyUserIds is { } only)
+        {
+            query = query.Where(u => only.Contains(u.Id));
+        }
+
+        if (filter.ExcludeUserIds is { Count: > 0 } exclude)
+        {
+            query = query.Where(u => !exclude.Contains(u.Id));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var like = "%" + filter.Search.Trim().Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal).Replace("_", "\\_", StringComparison.Ordinal) + "%";
+            query = query.Where(u => EF.Functions.Like(u.FullName, like, "\\") || EF.Functions.Like(u.Email!, like, "\\"));
+        }
+
+        var total = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        var found = await query
+            .OrderBy(u => u.FullName)
+            .ThenBy(u => u.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var ids = found.Select(u => u.Id).ToList();
+        var roleRows = await db.UserRoles
+            .Where(ur => ids.Contains(ur.UserId))
+            .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => new { ur.UserId, r.Name })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var rolesByUser = roleRows
+            .GroupBy(x => x.UserId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(x => x.Name!).Order(StringComparer.Ordinal).ToList());
+
+        return (found.Select(u => ToInfo(u, rolesByUser.GetValueOrDefault(u.Id, []))).ToList(), total);
     }
 
     public async Task DeleteUserAsync(Guid id, CancellationToken cancellationToken = default)

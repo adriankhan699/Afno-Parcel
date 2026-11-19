@@ -2,6 +2,7 @@ using NepalParcel.API.Extensions;
 using NepalParcel.Application;
 using NepalParcel.Infrastructure;
 using NepalParcel.Infrastructure.Identity;
+using NepalParcel.Infrastructure.Notifications;
 using NepalParcel.Infrastructure.Persistence;
 using Serilog;
 
@@ -22,7 +23,10 @@ try
 
     await app.Services.InitializeDatabaseAsync();
     await app.Services.SeedReferenceDataAsync();
+    await app.Services.SeedNotificationTemplatesAsync();
     await app.Services.EnsureSuperAdminAsync();
+    app.ScheduleRecurringJobs();
+    await app.LogNotificationProvidersAsync();
     await app.RunAsync();
 }
 catch (Exception ex) when (ex is not HostAbortedException && !string.Equals(ex.GetType().Name, "StopTheHostException", StringComparison.Ordinal))

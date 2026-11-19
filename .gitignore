@@ -6,6 +6,9 @@ appsettings.*.local.json
 *.pfx
 *.key
 
+# Proofs of delivery (private files) when running the API locally
+storage/
+
 # .NET
 bin/
 obj/

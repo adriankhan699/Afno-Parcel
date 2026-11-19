@@ -30,6 +30,7 @@ internal static class ServiceCollectionExtensions
             });
         services.AddExceptionHandler<GlobalExceptionHandler>();
 
+        services.AddBackgroundJobs(configuration);
         services.AddHttpContextAccessor();
         services.AddTransient<CorrelationIdMiddleware>();
         services.AddJwtAuthentication(configuration);

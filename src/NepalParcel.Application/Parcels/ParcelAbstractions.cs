@@ -54,6 +54,9 @@ public interface IParcelRepository
     /// <summary>Loads the parcel by tracking number (already normalised) with its status history (tracked).</summary>
     Task<Parcel?> GetByTrackingNumberAsync(string trackingNumber, CancellationToken cancellationToken = default);
 
+    /// <summary>Several parcels at once, without their history and not tracked (for lists).</summary>
+    Task<IReadOnlyDictionary<Guid, Parcel>> GetByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default);
+
     Task<bool> TrackingNumberExistsAsync(string trackingNumber, CancellationToken cancellationToken = default);
 
     /// <summary>Newest bookings first.</summary>
@@ -70,6 +73,12 @@ public interface IPaymentRepository
 
     /// <summary>The most recent payment for the parcel, tracked so it can be updated.</summary>
     Task<Payment?> GetLatestByParcelIdAsync(Guid parcelId, CancellationToken cancellationToken = default);
+
+    /// <summary>Tracked, so a verified online payment can be marked as paid.</summary>
+    Task<Payment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>All of the parcel's payments, newest first (not tracked).</summary>
+    Task<IReadOnlyList<Payment>> GetByParcelIdAsync(Guid parcelId, CancellationToken cancellationToken = default);
 }
 
 public interface IPricingRepository

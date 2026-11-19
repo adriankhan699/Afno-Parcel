@@ -44,6 +44,7 @@ internal static class WebApplicationExtensions
         app.UseRateLimiter();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseBackgroundJobs();
 
         app.MapControllers();
 

@@ -57,6 +57,9 @@ internal sealed class ParcelConfiguration : IEntityTypeConfiguration<Parcel>
         builder.HasIndex(p => p.ReceiverPhone);
         builder.HasIndex(p => p.SenderPhone);
         builder.HasIndex(p => p.BookedAtUtc);
+        builder.HasIndex(p => new { p.CurrentStatusId, p.StatusChangedAtUtc });
+        builder.HasIndex(p => p.NextWarehouseId);
+        builder.HasOne<Warehouse>().WithMany().HasForeignKey(p => p.NextWarehouseId);
 
         builder.HasOne<PricingRule>().WithMany().HasForeignKey(p => p.PricingRuleId);
         builder.HasOne<Customer>().WithMany().HasForeignKey(p => p.SenderCustomerId).IsRequired();

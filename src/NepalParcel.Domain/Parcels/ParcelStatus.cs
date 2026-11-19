@@ -189,18 +189,22 @@ public static class ParcelStatusRules
     }
 }
 
-/// <summary>Which roles may move a parcel into which status. Cancelling has its own endpoint and rules.</summary>
+/// <summary>
+/// Which roles may move a parcel into which status through the status API. Cancelling has its own endpoint and rules.
+/// Delivery agents are deliberately absent: they can only act on parcels assigned to them, through the agent API, which also
+/// collects the proof of delivery and the cash.
+/// </summary>
 public static class ParcelStatusPermissions
 {
     private static readonly Dictionary<ParcelStatusCode, string[]> Allowed = new()
     {
-        [ParcelStatusCode.PickedUp] = [Roles.SuperAdmin, Roles.BranchManager, Roles.BookingStaff, Roles.DeliveryAgent],
+        [ParcelStatusCode.PickedUp] = [Roles.SuperAdmin, Roles.BranchManager, Roles.BookingStaff],
         [ParcelStatusCode.Shipped] = [Roles.SuperAdmin, Roles.BranchManager, Roles.BookingStaff, Roles.WarehouseStaff],
         [ParcelStatusCode.InTransit] = [Roles.SuperAdmin, Roles.BranchManager, Roles.WarehouseStaff],
         [ParcelStatusCode.ArrivedAtWarehouse] = [Roles.SuperAdmin, Roles.BranchManager, Roles.WarehouseStaff],
-        [ParcelStatusCode.OutForDelivery] = [Roles.SuperAdmin, Roles.BranchManager, Roles.WarehouseStaff, Roles.DeliveryAgent],
-        [ParcelStatusCode.Delivered] = [Roles.SuperAdmin, Roles.BranchManager, Roles.DeliveryAgent],
-        [ParcelStatusCode.DeliveryFailed] = [Roles.SuperAdmin, Roles.BranchManager, Roles.DeliveryAgent],
+        [ParcelStatusCode.OutForDelivery] = [Roles.SuperAdmin, Roles.BranchManager, Roles.WarehouseStaff],
+        [ParcelStatusCode.Delivered] = [Roles.SuperAdmin, Roles.BranchManager],
+        [ParcelStatusCode.DeliveryFailed] = [Roles.SuperAdmin, Roles.BranchManager],
         [ParcelStatusCode.Returned] = [Roles.SuperAdmin, Roles.BranchManager, Roles.WarehouseStaff],
     };
 

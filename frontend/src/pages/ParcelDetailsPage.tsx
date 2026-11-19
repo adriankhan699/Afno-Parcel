@@ -2,11 +2,17 @@ import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 import { Alert, PrimaryButton, SecondaryButton, TextAreaField, TextField } from '../components/form';
+import NotificationsCard from '../components/NotificationsCard';
+import PaymentCard from '../components/PaymentCard';
 import PriceBreakdown from '../components/PriceBreakdown';
 import StatusUpdatePanel from '../components/StatusUpdatePanel';
 import Timeline from '../components/Timeline';
 import { ApiError, api } from '../lib/apiClient';
-import { canUpdateStatus } from '../lib/auth';
+import MovementHistory from '../components/MovementHistory';
+import { canSetParcelConsent, canViewAdmin, canViewNotifications, canViewParcelNotifications } from '../lib/auth';
+import { parseConsentOutcome } from '../lib/notification';
+import { usesManualConfirmation } from '../lib/payment';
+import { statusesOfferedTo } from '../lib/statusUpdate';
 import { formatAddress, formatNepalDateTime, formatNpr } from '../lib/format';
 import { formatWeight, paymentLabel, serviceLabel, statusLabel, statusTone } from '../lib/labels';
 import { problemSummary } from '../lib/problems';
@@ -54,6 +60,8 @@ export default function ParcelDetailsPage() {
   const parcel = updated && updated.id === id ? updated : fetched.status === 'loaded' ? fetched.data : null;
 
   const justBooked = (location.state as { justBooked?: boolean } | null)?.justBooked === true;
+  // Right after booking, how saving the SMS and WhatsApp choices went (the booking itself never waits for it).
+  const consentOutcome = parseConsentOutcome(location.state);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [reason, setReason] = useState('');
@@ -61,6 +69,7 @@ export default function ParcelDetailsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [paymentReference, setPaymentReference] = useState('');
+  const [movementsKey, setMovementsKey] = useState(0);
 
   async function run(action: () => Promise<ParcelResponse>) {
     setBusy(true);
@@ -79,6 +88,7 @@ export default function ParcelDetailsPage() {
   /** Reloads the parcel after a status change so the history, status and allowed next steps are up to date. */
   async function reload() {
     setUpdated(await api.get<ParcelResponse>(`/api/v1/parcels/${encodeURIComponent(id)}`));
+    setMovementsKey((k) => k + 1);
   }
 
   async function handleCancel(event: FormEvent<HTMLFormElement>) {
@@ -116,9 +126,14 @@ export default function ParcelDetailsPage() {
   }
   if (!parcel) return null;
 
+  // Cash has its own dialog and the online wallets are paid (and verified by the server) in the Payment card below;
+  // only the methods without a screen of their own keep the plain "Mark as paid" form.
   const canConfirmPayment =
-    auth.isCounterStaff && parcel.paymentStatus === 'Pending' && parcel.paymentMethod !== 'CashOnDelivery' && parcel.status !== 'Cancelled';
+    auth.isCounterStaff && parcel.paymentStatus === 'Pending' && usesManualConfirmation(parcel.paymentMethod) && parcel.status !== 'Cancelled';
   const trackingHref = `/track/${parcel.trackingNumber}`;
+  const isStaff = auth.isAuthenticated && canViewAdmin(auth.user?.roles);
+  // Delivery agents are offered no statuses here: they deliver through the agent app.
+  const offeredStatuses = statusesOfferedTo(auth.user?.roles, parcel.allowedNextStatuses);
   const dims =
     parcel.lengthCm && parcel.widthCm && parcel.heightCm ? `${parcel.lengthCm} × ${parcel.widthCm} × ${parcel.heightCm} cm` : null;
 
@@ -134,6 +149,25 @@ export default function ParcelDetailsPage() {
         <Alert tone="success">
           <strong>Booking confirmed.</strong> Your tracking number is{' '}
           <span className="font-mono font-semibold">{parcel.trackingNumber}</span>. Keep it to track your parcel.
+        </Alert>
+      )}
+      {justBooked && consentOutcome?.kind === 'saved' && (
+        <Alert tone="success">Update choices saved: {consentOutcome.channels}. Messages are sent only for the choices that were saved.</Alert>
+      )}
+      {justBooked && consentOutcome?.kind === 'failed' && (
+        <Alert tone="warning">
+          <strong>The parcel is booked, but your SMS and WhatsApp choices could not be saved.</strong>{' '}
+          {auth.isCounterStaff ? (
+            <>Record the sender’s choices again in the Notifications card on this page.</>
+          ) : (
+            <>
+              Set them on the{' '}
+              <Link to="/account/notifications" className="font-medium underline">
+                Parcel updates page
+              </Link>
+              .
+            </>
+          )}
         </Alert>
       )}
       {actionError && <Alert>{actionError}</Alert>}
@@ -160,6 +194,14 @@ export default function ParcelDetailsPage() {
           >
             Public tracking page
           </Link>
+          {isStaff && (
+            <Link
+              to={`/parcels/${parcel.id}/label`}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Print label
+            </Link>
+          )}
           {parcel.canCancel && (
             <SecondaryButton type="button" disabled={busy} onClick={() => dialogRef.current?.showModal()}>
               Cancel booking
@@ -219,13 +261,36 @@ export default function ParcelDetailsPage() {
         </Card>
       </div>
 
-      {auth.isAuthenticated && canUpdateStatus(auth.user?.roles) && parcel.allowedNextStatuses.length > 0 && (
-        <StatusUpdatePanel parcelId={parcel.id} allowedStatuses={parcel.allowedNextStatuses} onChanged={reload} />
+      <PaymentCard
+        parcelId={parcel.id}
+        trackingNumber={parcel.trackingNumber}
+        parcelStatus={parcel.status}
+        isCounterStaff={auth.isCounterStaff}
+        onChanged={() => void reload()}
+      />
+
+      {auth.isAuthenticated && canViewParcelNotifications(auth.user?.roles) && (
+        <NotificationsCard
+          parcelId={parcel.id}
+          trackingNumber={parcel.trackingNumber}
+          canSetConsent={canSetParcelConsent(auth.user?.roles)}
+          canOpenAdmin={canViewNotifications(auth.user?.roles)}
+        />
+      )}
+
+      {auth.isAuthenticated && offeredStatuses.length > 0 && (
+        <StatusUpdatePanel parcelId={parcel.id} allowedStatuses={offeredStatuses} onChanged={reload} />
       )}
 
       <Card title="Journey">
         <Timeline items={timelineFromHistory(parcel.history)} latest="last" label="Parcel history" />
       </Card>
+
+      {isStaff && (
+        <Card title="Movement history">
+          <MovementHistory parcelId={parcel.id} reloadKey={movementsKey} />
+        </Card>
+      )}
 
       <dialog
         ref={dialogRef}

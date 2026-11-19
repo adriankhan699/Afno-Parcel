@@ -2,6 +2,9 @@ using NepalParcel.Domain.Branches;
 
 namespace NepalParcel.Application.Branches;
 
+/// <summary>Criteria for the branch list.</summary>
+public sealed record BranchFilter(string? Search = null, BranchType? Type = null, bool IncludeInactive = false);
+
 /// <summary>Persistence abstraction for <see cref="Branch"/> aggregates.</summary>
 public interface IBranchRepository
 {
@@ -11,7 +14,8 @@ public interface IBranchRepository
 
     Task<bool> CodeExistsAsync(string code, CancellationToken cancellationToken = default);
 
-    Task<(IReadOnlyList<Branch> Items, int TotalCount)> GetPageAsync(
+    Task<(IReadOnlyList<Branch> Items, int TotalCount)> SearchAsync(
+        BranchFilter filter,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);

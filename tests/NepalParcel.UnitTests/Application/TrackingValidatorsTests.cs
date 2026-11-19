@@ -65,7 +65,7 @@ public sealed class TrackingValidatorsTests
         var validator = new ScanRequestValidator();
 
         Assert.Contains("TrackingNumber", Failed(validator.Validate(new ScanRequest("", "Arrival", Guid.NewGuid()))));
-        Assert.Contains("TrackingNumber", Failed(validator.Validate(new ScanRequest(new string('A', 41), "Arrival", Guid.NewGuid()))));
+        Assert.Contains("TrackingNumber", Failed(validator.Validate(new ScanRequest(new string('A', ScanRequestValidator.TrackingNumberInputMaxLength + 1), "Arrival", Guid.NewGuid()))));
         Assert.Contains("WarehouseId", Failed(validator.Validate(new ScanRequest("AFNK7M2Q9XT4B3", "Arrival", Guid.Empty))));
     }
 

@@ -38,8 +38,8 @@ public sealed class StatusEndpointsTests(NepalParcelApiFactory factory) : IClass
         var (parcel, customer, branch) = await NewParcelAsync();
         var warehouse = await _helpers.CreateWarehouseAsync(branch, "Kathmandu Hub");
         var counter = await _helpers.StaffAsync(Roles.BookingStaff);
-        var hub = await _helpers.StaffAsync(Roles.WarehouseStaff);
-        var rider = await _helpers.StaffAsync(Roles.DeliveryAgent);
+        var hub = await _helpers.StaffAtAsync(Roles.WarehouseStaff, branch);
+        var rider = await _helpers.StaffAsync(Roles.BranchManager);
 
         var picked = await counter.PostAsJsonAsync(StatusUri(parcel.Id), To("PickedUp", "Collected at the counter"));
         var shipped = await counter.PostAsJsonAsync(StatusUri(parcel.Id), To("Shipped", "Loaded on the morning truck", branchId: branch));
@@ -204,7 +204,7 @@ public sealed class StatusEndpointsTests(NepalParcelApiFactory factory) : IClass
     {
         var (parcel, _, branch) = await NewParcelAsync();
         await _helpers.AdvanceAsync(parcel.Id, ParcelStatusCode.PickedUp, ParcelStatusCode.Shipped, ParcelStatusCode.OutForDelivery);
-        var rider = await _helpers.StaffAsync(Roles.DeliveryAgent);
+        var rider = await _helpers.StaffAsync(Roles.BranchManager);
 
         var failed = await rider.PostAsJsonAsync(StatusUri(parcel.Id), To("DeliveryFailed", "Nobody at home"));
         var retry = await rider.PostAsJsonAsync(StatusUri(parcel.Id), To("OutForDelivery", branchId: branch));
@@ -222,7 +222,7 @@ public sealed class StatusEndpointsTests(NepalParcelApiFactory factory) : IClass
     {
         var (parcel, _, _) = await NewParcelAsync();
         await _helpers.AdvanceAsync(parcel.Id, ParcelStatusCode.PickedUp, ParcelStatusCode.Shipped, ParcelStatusCode.OutForDelivery);
-        var rider = await _helpers.StaffAsync(Roles.DeliveryAgent);
+        var rider = await _helpers.StaffAsync(Roles.BranchManager);
 
         var response = await rider.PostAsJsonAsync(StatusUri(parcel.Id), To("DeliveryFailed"));
 
@@ -291,21 +291,23 @@ public sealed class StatusEndpointsTests(NepalParcelApiFactory factory) : IClass
         var (parcel, _, branch) = await NewParcelAsync();
         var warehouse = await _helpers.CreateWarehouseAsync(branch);
         var counter = await _helpers.StaffAsync(Roles.BookingStaff);
-        var hub = await _helpers.StaffAsync(Roles.WarehouseStaff);
+        var hub = await _helpers.StaffAtAsync(Roles.WarehouseStaff, branch);
         var rider = await _helpers.StaffAsync(Roles.DeliveryAgent);
+        var manager = await _helpers.StaffAsync(Roles.BranchManager);
         await _helpers.AdvanceAsync(parcel.Id, ParcelStatusCode.PickedUp, ParcelStatusCode.Shipped);
 
-        // The counter cannot run the network; the rider cannot move a parcel between hubs.
+        // The counter cannot run the network; a delivery agent cannot use the status API at all (agents work through the agent API).
         Assert.Equal(HttpStatusCode.Forbidden, (await counter.PostAsJsonAsync(StatusUri(parcel.Id), To("InTransit"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await rider.PostAsJsonAsync(StatusUri(parcel.Id), To("InTransit"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await rider.PostAsJsonAsync(StatusUri(parcel.Id), To("ArrivedAtWarehouse", warehouseId: warehouse))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await hub.PostAsJsonAsync(StatusUri(parcel.Id), To("ArrivedAtWarehouse", warehouseId: warehouse))).StatusCode);
 
-        // Only the rider (or a manager) reports a delivery; the warehouse and the counter cannot.
+        // Here only a manager can report a delivery; the warehouse, the counter and the rider cannot (the rider uses the agent API).
         Assert.Equal(HttpStatusCode.OK, (await hub.PostAsJsonAsync(StatusUri(parcel.Id), To("OutForDelivery", warehouseId: warehouse))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await hub.PostAsJsonAsync(StatusUri(parcel.Id), To("Delivered"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await counter.PostAsJsonAsync(StatusUri(parcel.Id), To("Delivered"))).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await rider.PostAsJsonAsync(StatusUri(parcel.Id), To("Delivered"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await rider.PostAsJsonAsync(StatusUri(parcel.Id), To("Delivered"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsJsonAsync(StatusUri(parcel.Id), To("Delivered"))).StatusCode);
     }
 
     [Fact]

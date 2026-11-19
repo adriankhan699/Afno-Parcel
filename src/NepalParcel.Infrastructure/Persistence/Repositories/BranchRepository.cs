@@ -19,12 +19,31 @@ internal sealed class BranchRepository(NepalParcelDbContext dbContext) : IBranch
     public Task<bool> CodeExistsAsync(string code, CancellationToken cancellationToken = default) =>
         dbContext.Branches.AnyAsync(b => b.Code == code, cancellationToken);
 
-    public async Task<(IReadOnlyList<Branch> Items, int TotalCount)> GetPageAsync(
+    public async Task<(IReadOnlyList<Branch> Items, int TotalCount)> SearchAsync(
+        BranchFilter filter,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(filter);
+
         var query = dbContext.Branches.AsNoTracking();
+        if (!filter.IncludeInactive)
+        {
+            query = query.Where(b => b.IsActive);
+        }
+
+        if (filter.Type is { } type)
+        {
+            query = query.Where(b => b.Type == type);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var like = SqlLike.Contains(filter.Search.Trim());
+            query = query.Where(b =>
+                EF.Functions.Like(b.Code, like, "\\") || EF.Functions.Like(b.Name, like, "\\") || EF.Functions.Like(b.Address.District, like, "\\"));
+        }
 
         var total = await query.CountAsync(cancellationToken).ConfigureAwait(false);
         var items = await query

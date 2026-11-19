@@ -55,6 +55,22 @@ public sealed class DeliveryAgent : AuditableEntity
             IsAvailable = true,
         };
 
+    /// <summary>Changes contact and vehicle details. The name, login and branch stay as they are.</summary>
+    public void UpdateDetails(string phoneNumber, string? vehicleType, string? vehicleNumber, string? licenseNumber)
+    {
+        PhoneNumber = Guard.NormalizePhone(phoneNumber);
+        VehicleType = Guard.Optional(vehicleType, "Vehicle type", 40);
+        VehicleNumber = Guard.Optional(vehicleNumber, "Vehicle number", 30)?.ToUpperInvariant();
+        LicenseNumber = Guard.Optional(licenseNumber, "License number", 40);
+    }
+
+    /// <summary>Lets an agent who was switched off work again. They come back as available.</summary>
+    public void Activate()
+    {
+        IsActive = true;
+        IsAvailable = true;
+    }
+
     public void SetAvailability(bool isAvailable)
     {
         if (!IsActive && isAvailable)

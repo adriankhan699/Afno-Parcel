@@ -33,6 +33,45 @@ public static class TrackingNumbers
             ? string.Empty
             : input.Replace(" ", string.Empty, StringComparison.Ordinal).Replace("-", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
 
+    /// <summary>
+    /// Finds a valid tracking number in text a scanner or a person supplied: the number itself (in any case, with spaces or
+    /// dashes), or a tracking link such as <c>https://example.com/track/AFNK7M2Q9XT4B3</c> as read from a QR code.
+    /// </summary>
+    public static bool TryExtract(string? text, out string trackingNumber)
+    {
+        trackingNumber = string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var direct = Normalize(text);
+        if (IsValid(direct))
+        {
+            trackingNumber = direct;
+            return true;
+        }
+
+        // A link or other text: look for something shaped like a tracking number and keep the first one whose check character is right.
+        var upper = text.ToUpperInvariant();
+        for (var i = 0; i + Length <= upper.Length; i++)
+        {
+            if (string.CompareOrdinal(upper, i, Prefix, 0, Prefix.Length) != 0)
+            {
+                continue;
+            }
+
+            var candidate = upper.Substring(i, Length);
+            if (IsValid(candidate))
+            {
+                trackingNumber = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static bool IsValid(string? input)
     {
         var value = Normalize(input);

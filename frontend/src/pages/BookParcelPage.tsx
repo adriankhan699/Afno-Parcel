@@ -16,6 +16,7 @@ import {
   type FormErrors,
 } from '../lib/booking';
 import { formatNepalDateTime } from '../lib/format';
+import { bookingConsentRequest, chosenChannelsLabel, withBookingConsent, type ConsentChoices, type ConsentOutcome } from '../lib/notification';
 import { PAYMENT_LABELS, SERVICE_HINTS, SERVICE_LABELS } from '../lib/labels';
 import { problemSummary, problemToFieldErrors } from '../lib/problems';
 import { errorMessage, useApi } from '../lib/useApi';
@@ -70,6 +71,8 @@ export default function BookParcelPage() {
     }
     return initial;
   });
+  // Updates by SMS or WhatsApp are off unless the sender says yes. This is not part of the booking itself: it is sent right after.
+  const [consent, setConsent] = useState<ConsentChoices>({ sms: false, whatsApp: false });
   const [errors, setErrors] = useState<FormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -117,6 +120,14 @@ export default function BookParcelPage() {
     if (formError) alertRef.current?.focus();
   }, [formError]);
 
+  /**
+   * The consent choices are sent with the booking itself (see withBookingConsent), so by the time the parcel exists they are
+   * already recorded. This is what the parcel page is told to confirm.
+   */
+  function consentOutcome(): ConsentOutcome | undefined {
+    return bookingConsentRequest(consent) ? { kind: 'saved', channels: chosenChannelsLabel(consent) } : undefined;
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
@@ -133,9 +144,9 @@ export default function BookParcelPage() {
 
     setSubmitting(true);
     try {
-      const request = buildBookParcelRequest(effectiveForm, { allowPaymentReference: isCounter });
+      const request = withBookingConsent(buildBookParcelRequest(effectiveForm, { allowPaymentReference: isCounter }), consent);
       const parcel = await api.post<ParcelResponse>('/api/v1/parcels', request);
-      navigate(`/parcels/${parcel.id}`, { state: { justBooked: true } });
+      navigate(`/parcels/${parcel.id}`, { state: { justBooked: true, consent: consentOutcome() } });
     } catch (err) {
       if (err instanceof ApiError) {
         const fields = problemToFieldErrors(err.problem);
@@ -186,6 +197,36 @@ export default function BookParcelPage() {
               errors={errors}
               areas={areaList}
             />
+            <fieldset className="mt-5 rounded-lg border border-slate-200 p-4">
+              <legend className="px-1 text-sm font-medium text-slate-700">Updates about this parcel (optional)</legend>
+              <div className="space-y-2">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                  <input
+                    id="consent-sms"
+                    type="checkbox"
+                    checked={consent.sms}
+                    onChange={(event) => setConsent((c) => ({ ...c, sms: event.target.checked }))}
+                    className="h-4 w-4 accent-brand-600"
+                  />
+                  Send me SMS updates
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                  <input
+                    id="consent-whatsapp"
+                    type="checkbox"
+                    checked={consent.whatsApp}
+                    onChange={(event) => setConsent((c) => ({ ...c, whatsApp: event.target.checked }))}
+                    className="h-4 w-4 accent-brand-600"
+                  />
+                  Send me WhatsApp updates
+                </label>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                {isCounter
+                  ? 'Tick only if the sender agrees now, at the counter. We message only about this parcel’s journey, never advertising, and the sender can stop at any time (on WhatsApp by replying STOP).'
+                  : 'We use your phone number only to tell you about your parcels, never for advertising. You can change this any time on the Parcel updates page, and on WhatsApp by replying STOP.'}
+              </p>
+            </fieldset>
           </Section>
 
           <Section title="2. Receiver" description="Where the parcel is going. We deliver to the districts listed as served.">

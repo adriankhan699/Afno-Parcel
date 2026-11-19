@@ -42,6 +42,7 @@ internal sealed class DeliveryAssignmentConfiguration : IEntityTypeConfiguration
         builder.Ignore(a => a.IsOpen);
 
         builder.HasIndex(a => new { a.DeliveryAgentId, a.Status });
+        builder.HasIndex(a => new { a.DeliveryAgentId, a.AssignedAtUtc });
         builder.HasIndex(a => a.ParcelId);
 
         // A parcel can have only one open assignment per type at a time (prevents double assignment).
@@ -70,5 +71,22 @@ internal sealed class DeliveryProofConfiguration : IEntityTypeConfiguration<Deli
         builder.HasOne<Parcel>().WithMany().HasForeignKey(p => p.ParcelId).IsRequired();
         builder.HasOne<DeliveryAssignment>().WithMany().HasForeignKey(p => p.AssignmentId);
         builder.HasOne<DeliveryAgent>().WithMany().HasForeignKey(p => p.CapturedByAgentId);
+    }
+}
+
+internal sealed class DeliveryOtpConfiguration : IEntityTypeConfiguration<DeliveryOtp>
+{
+    public void Configure(EntityTypeBuilder<DeliveryOtp> builder)
+    {
+        builder.ToTable("DeliveryOtps", t => t.HasCheckConstraint("CK_DeliveryOtps_Attempts", "[FailedAttempts] >= 0"));
+        builder.ConfigureEntity();
+
+        // Only a keyed hash of the code is stored, never the code.
+        builder.Property(o => o.CodeHash).HasMaxLength(128).IsRequired();
+        builder.Property(o => o.RowVersion).IsRowVersion();
+
+        builder.HasIndex(o => new { o.AssignmentId, o.CreatedAtUtc });
+        builder.HasOne<Parcel>().WithMany().HasForeignKey(o => o.ParcelId).IsRequired();
+        builder.HasOne<DeliveryAssignment>().WithMany().HasForeignKey(o => o.AssignmentId).IsRequired();
     }
 }
